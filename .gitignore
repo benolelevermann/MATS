@@ -1,0 +1,95 @@
+# Local Python and tool state
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.claude/
+.dataset_inspector_runtime/
+
+# Local R state
+.Rhistory
+.RData
+.RDataTmp
+.Rproj.user/
+
+# Logs, process markers and temporary files
+*.log
+*.pid
+*.tmp
+*.temp
+*.bak
+*.bak_*
+~$*
+_train_sample.txt
+New Text Document.txt
+/tmp/
+
+# Large microscopy data, model artifacts and binary exports
+*.tif
+*.tiff
+*.npy
+*.npz
+*.pth
+*.pt
+*.ckpt
+*.zip
+*.7z
+*.tar
+*.gz
+*.roi
+*.traces
+*.swc
+*.mat
+*.class
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.pdf
+*.xlsx
+*.xls
+*.rds
+
+# nnU-Net data, preprocessing and trained models
+/nnUNet_raw/
+/nnUNet_preprocessed/
+/nnUNet_results/
+
+# Generated reviews, predictions, comparisons and cell exports
+/20[0-9][0-9]*/
+/web_pipeline_runs*/
+/review_dataset/
+/evo_pipeline_input_net141/
+/instance_annotation_dataset142/
+/cells_for_r_pipeline/
+/dataset137_div10_build_*/
+/dataset138_clean_single_cell_candidates/
+/mats_annotation_overview_*/
+/one_px_skeleton_review/
+/overview_*/
+/postprocessing*/
+/prediction_review/
+/preview*/
+/refiner_generation/
+/skeleton_connectivity_runs/
+/soma_skeleton_prediction_review/
+/training_data_overview_*/
+/training_overview/
+/Presentation/
+
+# Generated R-pipeline data; keep the scripts in r_pipeline/
+/r_pipeline/1_Extraction/
+/r_pipeline/20[0-9][0-9]*/
+/r_pipeline/3_SavedExtraction/
+/r_pipeline/ExampleCells/
+/r_pipeline/coordinate_extraction_source_dump.txt
+
+# Small local evaluation exports are reproducible and not source code
+/calibration-*.csv
+/*-ratings.csv
+/*-ratings-acceptance.json
+/*-ratings-manual-evaluation.json

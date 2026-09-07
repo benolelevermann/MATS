@@ -1,0 +1,142 @@
+---
+title: "Untitled"
+author: "Robert Denninger"
+date: "2026-06-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+mapCellsOntoPCSpaceSimple <- function(base_evo, new_evo) {
+  
+  # 1. Features angleichen (immer noch notwendig, damit Spalten übereinstimmen)
+  # Wichtig: predict() ist tolerant bei der Reihenfolge, aber die Spalten müssen existieren.
+  common_cols <- colnames(base_evo@morph_mtx)
+  
+  # Check ob alle Spalten da sind
+  if(!all(common_cols %in% colnames(new_evo@morph_full))) {
+    stop("Fehler: Nicht alle Features der Base-PCA sind im neuen Datensatz enthalten.")
+  }
+  
+  data_to_project <- new_evo@morph_full[, common_cols]
+  
+  # 2. & 3. Skalieren und Projizieren in einem Schritt
+  # R erkennt im 'pca'-Objekt automatisch die center/scale Parameter
+  pca_model <- base_evo@embedding_list[["PCA"]]
+  
+  new_pcs <- predict(pca_model, newdata = data_to_project)
+  
+  # Speichern
+  new_evo@embedding_list[["PCA"]] <- new_pcs
+  
+  message("Mapped cells saved in embedding_list via predict().")
+  return(new_evo)
+}
+
+```
+
+
+```{r}
+# ------------------------------------------------------------------------------
+# A) VORBEREITUNG & LADEN
+# ------------------------------------------------------------------------------
+
+# 1. Modelle laden
+load("Y:\\Felix\\scripts\\robertpipeline\\Final_Inference_System.RData")
+
+cellline_data <- readRDS("G:\\scSeq_timecourse_morphology_analysis\\tracing\\72h\\encrypted\\saving\\Extraction_2026-06-25_00-23-52.412747\\FeatureExtraction.rds")
+evo <- 
+
+cellline_data@embedding_list$PCA <- NULL
+# 2. Morphologisches Mapping (Dein Funktionsaufruf)
+# Das schreibt die projizierten PC1-10 in cellline_data@embedding_list$PCA
+cellline_data <- mapCellsOntoPCSpaceSimple(evo, cellline_data)
+
+cellline_embeds <- data.frame(cellline_data@embedding_list[["PCA"]])
+
+cellline_embeds$id <- rownames(cellline_embeds)
+
+cellline_data@meta.data <- merge_meta_sort(cellline_data@meta.data, cellline_embeds, by = "id")
+
+
+cellline_pcs <- as.data.frame(cellline_data@meta.data %>% dplyr::select(paste0("PC",1:10)))
+
+
+
+
+# ------------------------------------------------------------------------------
+# B) BIOLOGICAL SCORES (GLM Prediction)
+# ------------------------------------------------------------------------------
+
+# SR101 (Wahrscheinlichkeit für "High")
+cellline_data@meta.data$score_sr101 <- predict(fit_glm_sr101, newdata = cellline_pcs, type = "prob")$High
+
+# Fate (Wahrscheinlichkeit für Ziel-Klasse, meist Spalte 2)
+cellline_data@meta.data$score_fate  <- predict(fit_glm_fate,  newdata = cellline_pcs, type = "prob")[, 2]
+
+# Time (Rohwert, capped bei 0 für Plots)
+raw_time <- predict(fit_glm_time, newdata = cellline_pcs)
+cellline_data@meta.data$score_time <- raw_time
+cellline_data@meta.data$score_time_capped <- pmax(raw_time, 0)
+
+# Invasion (Achtung: Modell spuckt log-Werte aus)
+raw_inv_log <- predict(fit_glm_dist, newdata = cellline_pcs)
+cellline_data@meta.data$score_invasion <- expm1(raw_inv_log) # Rückrechnung für Meta-Daten (µm)
+cellline_data@meta.data$score_invasion_capped <- pmax(cellline_data@meta.data$score_invasion, 0)
+
+# ------------------------------------------------------------------------------
+# C) DIFFSCORE PROJEKTION (Das Herzstück)
+# ------------------------------------------------------------------------------
+
+# 3. DiffScore Input bauen
+score_input <- data.frame(
+  `SR101 Score`           = cellline_data@meta.data$score_sr101,
+  `Invasive Potential`    = log1p(pmax(cellline_data@meta.data$score_invasion, 0)), # Log Scale für PCA!
+  `Proliferative Potential`= cellline_data@meta.data$score_fate,
+  `Cellular Age Score`    = cellline_data@meta.data$score_time,
+  check.names = FALSE
+)
+
+# DEBUG: Check auf NAs vor der Projektion
+na_count <- sum(!complete.cases(score_input))
+if(na_count > 0) {
+  warning(paste("Achtung:", na_count, "Zellen haben NA in den Bio-Scores und bekommen keinen DiffScore."))
+}
+
+# 4. Projektion
+# predict() wendet jetzt automatisch die Skalierung aus dem Maus-Training an
+raw_diff_pred <- predict(diff_ref_model$pca_object, newdata = score_input)[, "PC1"]
+
+# Richtung & Scaling
+raw_diff_pred <- raw_diff_pred * diff_ref_model$direction
+
+limit_min <- diff_ref_model$limits[[1]] # Der erste Wert (min)
+limit_max <- diff_ref_model$limits[[2]] # Der zweite Wert (max)
+
+clamped_val <- pmax(limit_min, pmin(raw_diff_pred, limit_max))
+
+cellline_data@meta.data$diffscore <- (clamped_val - limit_min) / (limit_max - limit_min)
+
+
+# 5. Visualisierung
+# Wir filtern NAs raus für den Plot
+plot_data <- cellline_data@meta.data %>% filter(!is.na(diffscore))
+
+p_overlay <- ggplot() +
+  # Referenz (Maus)
+  geom_point(data = evo@meta.data, aes(x = PC1, y = PC2), 
+             color = "grey85", size = 0.5, alpha = 0.5) +
+  # Human
+  geom_point(data = plot_data, aes(x = PC1, y = PC2, color = diffscore), 
+             size = 1.2, alpha = 0.8) +
+  scale_color_viridis_c(option = "plasma", direction = -1, limits = c(0,1)) +
+  coord_fixed() +
+  theme_minimal() +
+  labs(title = "Inference on Mouse Landscape", color = "DiffScore")
+
+print(p_overlay)
+```
+

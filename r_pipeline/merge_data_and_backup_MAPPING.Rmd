@@ -1,0 +1,62 @@
+---
+title: "merge_data_and_backup"
+output: html_document
+date: '2024-05-14'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r dependencies}
+
+library(dplyr)
+
+library(devtools)
+
+# load r package
+load_all("X:\\Robert_temp\\data_combined\\code\\pipelines\\extract_features_for_framework_new\\r_package2")
+
+```
+
+
+
+```{r save data}
+
+featEx <- saveObjectWithoutMerging(featEx, "X:\\Robert_temp\\scEvoView\\work_on_figures\\workspace\\250123\\change_featureExtraction\\sample\\done")
+saving_folder <-"G:\\scSeq_timecourse_morphology_analysis\\tracing\\72h\\encrypted\\saving"
+featEx <- saveObjectWithoutMerging(featEx, saving_folder)
+View(featEx)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+
+library(ggplot2)
+
+visualizeCells(featEx)
+View(featEx)
+View(featEx@merged_features)
+evo@meta.data$clusters_new
+
+
+```
+
+
+```{r merge feature extractions}
+
+#Enter file paths from saved feature extraction(same path as in "save data" chunk + THE SUBFOLDER WITH TIME STAMP) as a vector
+
+
+featureExtractions <- c("Z:\\Projects\\scEvoView\\ExperimentalData\\2P\\Radiotherapy\\R10\\R10_Hyperstack\\features\\Extraction_2026-05-18_17-05-05.300404", "Z:\\Projects\\scEvoView\\ExperimentalData\\2P\\Radiotherapy\\R10\\R10_Hyperstack\\features\\Extraction_2026-05-15_10-39-46.414499")
+
+
+mergeFeatureExtractions(featureExtractions, "Z:\\Projects\\scEvoView\\ExperimentalData\\2P\\Radiotherapy\\R10\\results")
+
+
+
+
+```
+
+
+

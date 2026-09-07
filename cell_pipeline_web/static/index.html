@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f2f0e9">
+  <title>Netz 141 · Single Cell Pipeline</title>
+  <meta name="description" content="Lokale TIFF-Pipeline mit Netz 141 final, wählbarer Hysterese und konservativer Einzelzell-Extraktion.">
+  <link rel="stylesheet" href="/styles.css?v=20260905a">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Single Cell Extractor Startseite">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>Single Cell Extractor</span>
+      </a>
+      <div class="topbar-actions">
+        <a class="dataset-inspector-link" id="dataset-inspector-link" href="/dataset-inspector">Trainingsdaten ansehen</a>
+        <div class="system-state"><span class="state-dot"></span> Lokal · Dataset <b data-network-id>…</b></div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="eyebrow">MICROSCOPY WORKFLOW / <span data-network-id>…</span></div>
+        <h1 id="hero-title">Vom TIFF zu<br><em>geprüften Einzelzellen.</em></h1>
+        <p class="hero-copy" id="hero-copy">Netz <span data-network-id>…</span> final segmentiert das vollständige Mikroskopiebild. Danach schließt die gewählte Hysterese schwache Skelettstellen; anschließend prüfst du die konservativ isolierten Zell-Crops.</p>
+        <div class="pipeline-strip" aria-label="Verarbeitungsschritte">
+          <span><b>01</b> Prediction</span><i></i>
+          <span><b>02</b> Hysterese</span><i></i>
+          <span><b>03</b> Isolation</span><i></i>
+          <span><b>04</b> Tracing</span><i></i>
+          <span><b>05</b> Evo Export</span><i></i>
+          <span><b>06</b> Crop + Review</span>
+        </div>
+      </section>
+
+      <section class="fov-library" id="fov-library" hidden>
+        <div class="section-heading fov-heading">
+          <div>
+            <div class="card-kicker">MICA · C3–C10</div>
+            <h2>FOV-Vorauswahl</h2>
+            <p>Markiere zunächst gute Beispiel-FOVs. Daraus kannst du weitere zufällige Felder desselben Übersichtsbildes erzeugen und anschließend die besten Netz-Eingaben auswählen.</p>
+          </div>
+          <div class="selection-total"><strong id="fov-selected-count">0</strong><span>ausgewählt</span></div>
+        </div>
+        <div class="fov-toolbar">
+          <label>DIV<select id="fov-div-filter"><option value="all">Alle</option></select></label>
+          <label>Platte<select id="fov-plate-filter"><option value="all">Alle</option></select></label>
+          <label>Well<select id="fov-well-filter"><option value="all">Alle</option></select></label>
+          <span id="fov-visible-count">0 Bilder</span>
+          <button class="text-button" id="fov-select-visible" type="button">Sichtbare auswählen</button>
+          <button class="text-button" id="fov-clear-selection" type="button">Auswahl leeren</button>
+        </div>
+        <div class="fov-gallery" id="fov-gallery"></div>
+        <div class="fov-queue-bar">
+          <p><strong id="fov-queue-title">Noch kein FOV ausgewählt</strong><small>„Mehr FOVs“ erzeugt sechs neue Felder pro ausgewähltem Übersichtsbild. „Analysieren“ schickt die Auswahl direkt ins Netz.</small></p>
+          <div class="fov-actions">
+            <button class="download-button secondary" id="fov-expand-button" type="button" disabled>6 weitere je Übersicht <span>＋</span></button>
+            <button class="primary-button" id="fov-queue-button" type="button" disabled>Auswahl analysieren <span>→</span></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace-grid">
+        <article class="upload-card">
+          <div class="card-kicker" id="new-run-kicker">NEUER LAUF</div>
+          <h2>Übersichtsbild hochladen</h2>
+          <p>Ein zweidimensionales TIFF, wie es auch direkt in nnU-Net eingeht.</p>
+          <div class="hysteresis-choice">
+            <label for="hysteresis-profile">Hysterese-Empfindlichkeit</label>
+            <select id="hysteresis-profile" aria-describedby="hysteresis-profile-help">
+              <option value="adaptive">Adaptiv (alpha 1/3)</option>
+            </select>
+            <small id="hysteresis-profile-help">Bildabhängige Standardschwellen.</small>
+          </div>
+          <label class="dropzone" id="dropzone" for="file-input">
+            <input id="file-input" type="file" accept=".tif,.tiff,image/tiff">
+            <span class="upload-glyph" aria-hidden="true">↥</span>
+            <strong id="drop-title">TIFF hier ablegen</strong>
+            <small id="drop-copy">oder klicken, um eine Datei auszuwählen</small>
+          </label>
+          <div class="upload-footer">
+            <span id="selected-file">Noch keine Datei ausgewählt</span>
+            <button class="primary-button" id="start-button" type="button" disabled>Analyse starten <span>→</span></button>
+          </div>
+          <div class="upload-progress" id="upload-progress" hidden>
+            <span id="upload-progress-bar"></span>
+          </div>
+        </article>
+
+        <aside class="rules-card">
+          <div class="card-kicker">KONSERVATIVE REGELN</div>
+          <h2>Nur eindeutige Zellen passieren.</h2>
+          <ul>
+            <li><span>✓</span><p><strong>Isoliert</strong>Genau ein Soma in einer zusammenhängenden Struktur.</p></li>
+            <li><span>↗</span><p><strong>Überlappung</strong>Klare Mehrfachzentren werden zuerst in einzelne Somata getrennt.</p></li>
+            <li><span>↗</span><p><strong>Getrennt</strong>Danach müssen alle Somata der Konfliktgruppe eindeutig getract werden.</p></li>
+            <li><span>×</span><p><strong>Verworfen</strong>Unklare Soma-Splits sowie fehlende, kollidierende oder unvollständige Traces werden nicht exportiert.</p></li>
+          </ul>
+          <div class="rule-note">Für isolierte Zellen ist die Hysterese die einzige morphologische Nachbearbeitung. NeuroTreeTracer erhält bei Konflikten intern eine temporär um 3 px verbreiterte Suchmaske; exportiert werden seine getrennten Traces, nicht diese Hilfsmaske.</div>
+        </aside>
+      </section>
+
+      <section class="run-panel" id="run-panel" hidden>
+        <div class="run-heading">
+          <div>
+            <div class="card-kicker">LIVE STATUS</div>
+            <h2 id="run-title">Verarbeitung läuft</h2>
+          </div>
+          <span class="status-pill" id="status-pill">Warteschlange</span>
+        </div>
+        <div class="progress-line"><span id="job-progress-bar"></span></div>
+        <div class="progress-meta"><strong id="progress-percent">0%</strong><span id="progress-message">Job wird vorbereitet.</span></div>
+        <div class="stage-grid" id="stage-grid">
+          <div data-phase="prediction"><span>01</span><p>Dataset <b data-network-id>…</b><small>Prediction</small></p></div>
+          <div data-phase="hysteresis"><span>02</span><p>Hysterese<small id="active-hysteresis-label">gewählte Schwelle</small></p></div>
+          <div data-phase="cell_classification"><span>03</span><p>Isolation<small>Topologie</small></p></div>
+          <div data-phase="neurotreetracer"><span>04</span><p>Konflikte<small>NeuroTreeTracer</small></p></div>
+          <div data-phase="evo_finalization"><span>05</span><p>Evo Export<small>SNT + Prüfung</small></p></div>
+        </div>
+        <details class="live-log" open>
+          <summary>Live-Protokoll <span>letzte Meldungen</span></summary>
+          <ol id="event-log"></ol>
+        </details>
+      </section>
+
+      <section class="results" id="results" hidden>
+        <div class="section-heading">
+          <div>
+            <div class="card-kicker">ERGEBNIS</div>
+            <h2>Einzelzell-Crops</h2>
+            <p id="result-copy">Alle angezeigten Masken enthalten genau ein Soma.</p>
+          </div>
+          <div class="result-actions">
+            <a class="download-button secondary" id="review-download-button" href="/api/review-dataset/download">Freigegebene Zellen <span>↓</span></a>
+            <a class="download-button" id="download-button" href="#">Evo-Paket laden <span>↓</span></a>
+          </div>
+        </div>
+        <div class="stats-grid">
+          <article><span id="stat-exported-label">EXPORTIERT</span><strong id="stat-exported">0</strong><small id="stat-exported-copy">Einzelzellen</small></article>
+          <article><span id="stat-isolated-label">DIREKT</span><strong id="stat-isolated">0</strong><small id="stat-isolated-copy">isolierte Zellen</small></article>
+          <article><span id="stat-traced-label">GETRACED</span><strong id="stat-traced">0</strong><small id="stat-traced-copy">aus Konflikten</small></article>
+          <article><span id="stat-rejected-label">VERWORFEN</span><strong id="stat-rejected">0</strong><small id="stat-rejected-copy">Konfliktgruppen</small></article>
+        </div>
+        <div class="review-console">
+          <div>
+            <div class="card-kicker">MANUELLE QUALITÄTSKONTROLLE</div>
+            <h3 id="review-heading">Nur das Endergebnis bewerten.</h3>
+            <p id="review-instructions">Du siehst Netz <span data-network-id>…</span>, Hysterese und die isolierte Einzelzelle nebeneinander. Drücke <strong>→ für gut</strong> oder <strong>← für nicht gut</strong>; danach erscheint sofort die nächste offene Zelle.</p>
+          </div>
+          <div class="review-overview">
+            <strong id="review-progress">0 / 0 geprüft</strong>
+            <span><i id="review-progress-bar"></i></span>
+            <small id="review-approved">0 freigegeben</small>
+          </div>
+        </div>
+        <div class="gallery-toolbar">
+          <span id="gallery-count">0 Crops</span>
+          <div class="review-filters" id="review-filters" aria-label="Crops filtern">
+            <button class="active" type="button" data-filter="all">Alle</button>
+            <button type="button" data-filter="pending">Offen</button>
+            <button type="button" data-filter="approved">Freigegeben</button>
+            <button type="button" data-filter="rejected">Abgelehnt</button>
+          </div>
+          <button class="text-button" id="next-pending" type="button">Nächste offene Zelle anzeigen</button>
+          <button class="text-button next-run-button" id="next-ready-run" type="button">Nächstes FOV →</button>
+        </div>
+        <div class="crop-gallery" id="crop-gallery"></div>
+      </section>
+
+      <section class="history-section">
+        <div class="section-heading compact">
+          <div><div class="card-kicker">VERLAUF</div><h2>Letzte Läufe</h2></div>
+          <button class="text-button" id="refresh-history" type="button">Aktualisieren</button>
+        </div>
+        <div class="history-list" id="history-list"><p class="empty-state">Noch keine Läufe vorhanden.</p></div>
+      </section>
+    </main>
+
+    <footer><span id="workflow-footer">Dataset <b data-network-id>…</b> final · wählbare Hysterese · konservative Zell-Isolation</span><span>Lokale Verarbeitung – Daten verlassen diesen Rechner nicht.</span></footer>
+  </div>
+
+  <dialog class="crop-dialog" id="crop-dialog">
+    <form method="dialog" class="crop-dialog-shell">
+      <div class="crop-dialog-heading">
+        <div><div class="card-kicker">MANUELLER ZUSCHNITT</div><h2 id="crop-dialog-title">Zell-Crop anpassen</h2></div>
+        <button class="dialog-close" value="cancel" aria-label="Dialog schließen">×</button>
+      </div>
+      <p class="crop-help">Ziehe die Ecken oder verschiebe den Rahmen. Der gestrichelte grüne Bereich enthält alle Skelett- und Somapixel und darf nicht angeschnitten werden.</p>
+      <div class="crop-canvas-wrap"><canvas id="crop-canvas"></canvas></div>
+      <div class="crop-fields">
+        <label>X<input id="crop-x" type="number" min="0" step="1"></label>
+        <label>Y<input id="crop-y" type="number" min="0" step="1"></label>
+        <label>Breite<input id="crop-width" type="number" min="32" step="1"></label>
+        <label>Höhe<input id="crop-height" type="number" min="32" step="1"></label>
+      </div>
+      <div class="crop-dialog-footer">
+        <span id="crop-validation">Alle Zellpixel liegen sicher im Crop.</span>
+        <div>
+          <button class="text-button" id="crop-reset" type="button">Automatischen Crop verwenden</button>
+          <button class="primary-button" id="crop-save" type="button">Crop speichern <span>✓</span></button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+  <script src="/app.js?v=20260905c" defer></script>
+</body>
+</html>

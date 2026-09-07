@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zell-Instanzen annotieren</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260905b">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Dataset 142 · Instance Ground Truth</p>
+      <h1>Zellen eindeutig zuordnen</h1>
+    </div>
+    <div id="save-state" class="save-state"><span></span> Automatisch gespeichert</div>
+  </header>
+
+  <main class="app-shell">
+    <aside class="sidebar cases-panel">
+      <div class="panel-heading">
+        <div><p class="section-kicker">01</p><h2>Übersichtsbilder</h2></div>
+        <span id="case-total" class="count-pill">–</span>
+      </div>
+      <div id="case-list" class="case-list"><p class="muted">Bilder werden geladen …</p></div>
+      <section class="overview-card" id="overview-card" hidden>
+        <div class="overview-wrap">
+          <img id="overview-image" alt="Mosaikübersicht">
+          <div id="overview-marker" class="overview-marker"></div>
+        </div>
+        <p>Klicke in die Übersicht, um direkt zu einem Bereich zu springen.</p>
+      </section>
+      <section class="help-card">
+        <strong>So geht es schnell</strong>
+        <ol>
+          <li><kbd>N</kbd> drücken und das Soma der nächsten Zelle anklicken.</li>
+          <li>Skeleton mit <kbd>1</kbd> zuordnen oder mit <kbd>F</kbd> als Komponente füllen.</li>
+          <li>Kreuzungen mit <kbd>V</kbd> doppelt zuordnen oder mit <kbd>U</kbd> als unsicher markieren.</li>
+        </ol>
+      </section>
+    </aside>
+
+    <section class="workspace">
+      <div class="case-header">
+        <div>
+          <p class="section-kicker">02 · Arbeitsbereich</p>
+          <h2 id="case-title">Wähle ein Mosaik</h2>
+          <p id="tile-position" class="muted">–</p>
+        </div>
+        <div class="header-actions">
+          <label class="select-label">Ansicht
+            <select id="view-select">
+              <option value="combined">Rohbild + Labels + Zellen</option>
+              <option value="semantic">Rohbild + vorhandene Labels</option>
+              <option value="instances">Nur Zellzuordnung</option>
+              <option value="raw">Nur Rohbild</option>
+            </select>
+          </label>
+          <button id="complete-button" class="quiet" disabled>Als fertig markieren</button>
+          <button id="export-button" class="primary" disabled>Trainingsdaten exportieren</button>
+        </div>
+      </div>
+
+      <div class="metrics" id="metrics">
+        <article><span>Soma zugeordnet</span><strong id="soma-coverage">–</strong><div><i id="soma-bar"></i></div></article>
+        <article><span>Skeleton zugeordnet</span><strong id="skeleton-coverage">–</strong><div><i id="skeleton-bar"></i></div></article>
+        <article><span>Noch offen</span><strong id="unassigned-count">–</strong><small>Vordergrundpixel</small></article>
+        <article><span>Unsicher</span><strong id="ambiguous-count">–</strong><small>werden im Loss ignoriert</small></article>
+      </div>
+
+      <div class="toolstrip" role="toolbar" aria-label="Annotationswerkzeuge">
+        <button id="new-cell" class="primary tool" data-tool="new" disabled><span>＋</span> Neue Zelle <kbd>N</kbd></button>
+        <span class="divider"></span>
+        <button class="tool active" data-tool="skeleton" disabled><span class="cyan-dot"></span> Skeleton <kbd>1</kbd></button>
+        <button class="tool" data-tool="soma" disabled><span class="pink-dot"></span> Soma <kbd>2</kbd></button>
+        <button class="tool" data-tool="fill" disabled><span>▣</span> Komponente <kbd>F</kbd></button>
+        <button class="tool" data-tool="overlap" disabled><span>◒</span> Überlappung <kbd>V</kbd></button>
+        <button class="tool warning" data-tool="ambiguous" disabled><span>?</span> Unsicher <kbd>U</kbd></button>
+        <button class="tool" data-tool="clear-ambiguous" disabled><span>✓</span> Unsicher lösen</button>
+        <button class="tool" data-tool="erase" disabled><span>⌫</span> Entfernen <kbd>E</kbd></button>
+        <span class="divider"></span>
+        <label class="radius-control">Pinsel <strong id="radius-value">3 px</strong><input id="radius" type="range" min="0" max="24" value="3" disabled></label>
+      </div>
+
+      <div class="stage" id="stage">
+        <div id="empty-state" class="empty-state">
+          <div class="cell-glyph">①</div>
+          <h2>Wähle links ein Mosaik</h2>
+          <p>Hier erscheint dann ein präziser 512-px-Ausschnitt. Deine Arbeit wird nach jeder Aktion gespeichert.</p>
+        </div>
+        <div id="canvas-shell" class="canvas-shell" hidden>
+          <img id="tile-image" alt="Aktueller Bildausschnitt" draggable="false">
+          <canvas id="draw-canvas" width="512" height="512" aria-label="Annotationsfläche"></canvas>
+          <div id="cursor" class="brush-cursor"></div>
+        </div>
+        <div id="toast" class="toast" hidden></div>
+      </div>
+
+      <nav class="tile-nav" aria-label="Navigation zwischen Bildbereichen">
+        <button id="previous-cell-tile" class="quiet" disabled>← vorheriger Bereich</button>
+        <div class="direction-pad">
+          <button data-move="up" aria-label="Nach oben" disabled>↑</button>
+          <button data-move="left" aria-label="Nach links" disabled>←</button>
+          <span id="tile-number">– / –</span>
+          <button data-move="right" aria-label="Nach rechts" disabled>→</button>
+          <button data-move="down" aria-label="Nach unten" disabled>↓</button>
+        </div>
+        <button id="next-open-tile" class="quiet" disabled>Nächster offene Bereich →</button>
+      </nav>
+    </section>
+
+    <aside class="sidebar cells-panel">
+      <div class="panel-heading">
+        <div><p class="section-kicker">03</p><h2>Zellen im Mosaik</h2></div>
+        <span id="cell-total" class="count-pill">0</span>
+      </div>
+      <div id="active-cell-empty" class="active-empty">Lege mit <kbd>N</kbd> die erste Zelle an.</div>
+      <div id="cell-list" class="cell-list"></div>
+      <section class="selection-card" id="selection-card" hidden>
+        <div><span id="selection-color"></span><strong id="selection-label"></strong></div>
+        <p><span id="selection-skeleton">0</span> Skeletonpixel · <span id="selection-soma">0</span> Somapixel</p>
+        <div class="selection-actions"><button id="rename-cell" class="quiet">Umbenennen</button><button id="delete-cell" class="danger">Zelle löschen</button></div>
+      </section>
+      <section class="legend-card">
+        <h3>Darstellung</h3>
+        <p><i class="legend cyan"></i> noch nicht zugeordnetes Skeleton</p>
+        <p><i class="legend pink"></i> noch nicht zugeordnetes Soma</p>
+        <p><i class="legend striped"></i> zwei Zellen am selben Pixel</p>
+        <p><i class="legend amber"></i> unsicher – wird ignoriert</p>
+      </section>
+    </aside>
+  </main>
+
+  <dialog id="result-dialog">
+    <form method="dialog">
+      <button class="dialog-close" value="close" aria-label="Schließen">×</button>
+      <p class="section-kicker">Export abgeschlossen</p>
+      <h2 id="result-title">Trainingsdaten gespeichert</h2>
+      <div id="result-content"></div>
+      <button class="primary" value="close">Schließen</button>
+    </form>
+  </dialog>
+
+  <script src="/static/app.js?v=20260905b"></script>
+</body>
+</html>

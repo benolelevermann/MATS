@@ -1,0 +1,4 @@
+[submodule "external/NeuroTreeTracer"]
+	path = external/NeuroTreeTracer
+	url = https://github.com/cihanbilge/AutomatedTreeStructureExtraction
+	ignore = dirty

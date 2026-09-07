@@ -1,0 +1,1161 @@
+---
+title: "Preparing meta data and swc files"
+author: "Robert Denninger"
+date: '2024-05-14'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+
+```{r install dependencies}
+
+library(stringr)
+library(strex)
+
+
+
+```
+
+```{r install package}
+
+library(devtools)
+library(crayon)
+
+# load r package
+load_all("X:\\Robert_temp\\data_combined\\code\\pipelines\\extract_features_for_framework_new\\r_package2")
+
+```
+
+
+```{r get meta data from multiframe cell segmentation}
+
+
+############## settings
+cell_folder <- "Y:\\Projects\\scEvoView\\ExperimentalData\\2P\\Fasudil\\Hyperstacks\\final\\MB105\\cells"
+stack_directory <- "Y:\\Projects\\scEvoView\\ExperimentalData\\2P\\Fasudil\\Hyperstacks\\final\\MB105\\cells"
+
+pixel_height <- 0.67
+pixel_width <- 0.67
+pixel_depth <- 8
+  
+input_pixel_unit <- "microns"
+is_swc_scaled <- T
+mousename <- "MB105"
+cellline <- "S24 GFP"
+#############
+
+
+meta_data <- getMetaData_multiframe(mousename, cellline, cell_folder, pixel_width, pixel_height, pixel_depth, input_pixel_unit, is_swc_scaled, stack_directory)
+
+
+
+######label human
+meta_data$human <- 0 
+#######
+
+
+#######label em
+meta_data$em <- 0
+#######
+
+
+#######describe experiment/batch
+meta_data$batch <- "justsingleframe"
+#######
+
+# celllinecontrol                    em       firstlastframes                 human       justsingleframe new_sr101cells_robert 
+#                  241                    70                    56                    88                    30                   192 
+#           rednucleus           rt_survival       sr101multiframe      sr101singleframe                stella 
+#                  579                   546                  1252                   639                  1504 
+
+
+
+#######label rt experiment
+meta_data$rt_experiment <- 0  
+#######
+
+
+#######label if cell is surviving rt
+meta_data$is_surviving_rt <- 0  
+#######
+
+#######label if timepoint is after rt
+meta_data$post_rt <- 0  
+#######
+
+
+
+
+
+
+colnames(meta_data)
+
+```
+
+```{r get meta data from singe frame cell segmentation}
+
+############## settings
+cell_folder <- "C:/Ole/20260721_CellClassification_v2/cells_for_r_pipeline"
+stack_directory <- "C:/Ole/20260721_CellClassification_v2/overview_inference/input_2d"
+
+pixel_height <- 1.25
+pixel_width <- 1.25
+pixel_depth <- 1.0000000
+  
+input_pixel_unit <- "microns"
+is_swc_scaled <- T
+mousename <- ""
+cellline <- "S24 GFP"
+#############
+
+
+meta_data <- getMetaData_singlecell(cellline, cell_folder, mousename, pixel_width, pixel_height, pixel_depth, input_pixel_unit, is_swc_scaled, stack_directory)
+
+
+
+#######label human
+meta_data$human <- 0
+#######
+
+
+#######label em
+meta_data$em <- 0
+#######
+
+
+#######describe experiment/batch
+meta_data$batch <- "DIV07"
+#######
+
+# celllinecontrol                    em       firstlastframes                 human       justsingleframe new_sr101cells_robert 
+#                  241                    70                    56                    88                    30                   192 
+#           rednucleus           rt_survival       sr101multiframe      sr101singleframe                stella 
+#                  579                   546                  1252                   639                  1504 
+
+
+
+#######label rt experiment
+meta_data$rt_experiment <- 0  
+#######
+
+
+#######label if cell is surviving rt
+meta_data$is_surviving_rt <- 0  
+#######
+
+#######label if timepoint is after rt
+meta_data$post_rt <- 0  
+#######
+
+
+
+
+```
+
+```{r get meta data from single frame BATCH cell segmentation}
+
+
+############## settings
+result_folder <- "G:\\scSeq_timecourse_morphology_analysis\\tracing\\72h\\encrypted\\tracings"
+stack_folder <- "G:\\scSeq_timecourse_morphology_analysis\\tracing\\72h\\encrypted\\stack"
+input_pixel_unit <- "microns"
+is_swc_scaled <- T
+
+
+#############
+
+
+
+
+meta_data <- getMetaData_singlecellBATCH(result_folder, stack_folder, input_pixel_unit, is_swc_scaled)
+
+
+########## manually input cellline
+meta_data$cellline <- "S24GFP"
+##########
+
+
+#######label human
+meta_data$human <- 0 
+#######
+
+
+#######label em
+meta_data$em <- 0
+#######
+
+
+
+#######describe experiment/batch
+meta_data$batch <- ""
+#######
+
+# celllinecontrol                    em       firstlastframes                 human       justsingleframe new_sr101cells_robert 
+#                  241                    70                    56                    88                    30                   192 
+#           rednucleus           rt_survival       sr101multiframe      sr101singleframe                stella 
+#                  579                   546                  1252                   639                  1504 
+
+
+
+#######label rt experiment
+meta_data$rt_experiment <- 0  
+#######
+
+
+#######label if cell is surviving rt
+meta_data$is_surviving_rt <- 0  
+#######
+
+#######label if timepoint is after rt
+meta_data$post_rt <- 0  
+#######
+
+
+
+
+
+
+#######give real pixel sizes if swc files are unscaled
+meta_data$pixel_width <- NA
+#######
+
+
+#######describe experiment/batch
+meta_data$pixel_height <- NA
+#######
+
+
+#######describe experiment/batch
+meta_data$pixel_depth <- NA
+#######
+
+
+
+#Antonnewinvitrometadata########################
+#encryption_keys <- read.csv("Y:/Anton/02_Projects/scEvoView/Experiments/MICA/Anton_96well_eGFP_240616M140_S24GFP_plate2_cropped_/encryption_key.csv")
+#colnames(encryption_keys) <- c("encryptedID", "timepoint", "condition")
+#meta_data <- merge(meta_data, encryption_keys, by.x = "mousename", by.y = "encryptedID", all.x = TRUE)
+#head(meta_data)
+#######
+
+
+
+
+```
+
+
+
+
+
+
+
+
+```{r}
+#correct_niro
+
+meta_data <- getMetaData_singlecellBATCHNiro(result_folder, stack_folder, input_pixel_unit, is_swc_scaled)
+
+
+
+meta_data$drug[12:156] <- "Y27"
+
+meta_data$dose[121:156] <- "100uM"
+
+getwd()
+
+
+View(meta_data)
+
+meta_data$id <- paste0(meta_data$cellid, "_", meta_data$cellframe)
+
+
+write.csv(meta_data, "Y:/Robert_temp/scEvoView/work_on_figures/inVitro/meta_data.csv")
+
+
+getMetaData_singlecellBATCHNiro <- function(input_folder, stacks_folder, input_pixel_unit, input_swc_scaled){
+    
+    
+    
+    input_pixel_height <- NA
+    input_pixel_width <- NA
+    input_pixel_depth <- NA
+    
+    input_cellline <- NA
+    
+    roberttms <- 0
+    
+    
+    message("starting extractions")
+    
+    
+    
+    #extract tm swc files
+    swc_dirs <- list.files(input_folder, recursive = T, pattern = "000.swc", full.names = T)
+    
+    
+    
+    
+    #correct for corrupt swc files
+    corrupt_swc_dirs <- list.files(input_folder, recursive = T, pattern = "001.swc", full.names = T)
+    swcname_stump <- str_before_last(swc_dirs, "-000.swc")
+    corrupt_swcname_stump <- str_before_last(corrupt_swc_dirs, "-001.swc")
+    
+    
+    if(roberttms == 1){
+      swc_dirs <- swc_dirs[grepl("robert_traces", swc_dirs)]
+      
+      corrupt_swc_dirs <- list.files(input_folder, recursive = T, pattern = "001.swc", full.names = T)
+      corrupt_swc_dirs <- corrupt_swc_dirs[grepl("robert_traces", corrupt_swc_dirs)]
+      swcname_stump <- str_before_last(swc_dirs, "-000.swc")
+      corrupt_swcname_stump <- str_before_last(corrupt_swc_dirs, "-001.swc")
+    }
+    
+    
+    
+    swc_dirs <- swc_dirs[!swcname_stump %in% corrupt_swcname_stump]
+    
+    swcname_stump <- str_before_last(swc_dirs, "-000.swc")
+    
+    
+    #get traces file
+    traces_dirs <- paste0(swcname_stump,".traces")
+    
+    
+    
+    
+    
+    if (F %in% file.exists(swc_dirs)){
+      message("ERROR: not all swc files are existing")
+      break
+    } else{
+      message("CHECK: All swc files exist.")
+    }
+    
+    
+    if (F %in% file.exists(traces_dirs)){
+      message("ERROR: not all traces files corresponding to swcs are existing")
+      break
+    } else{
+      message("CHECK: All traces files exist.")
+    }
+    
+    
+    mousename <- basename(dirname(dirname(swc_dirs)))
+    
+
+    
+    if(roberttms == 1){
+      mousename <- basename(dirname(dirname(dirname(swc_dirs))))
+    }
+    
+    
+    ##initialize dataframe to save results
+    result_df <- data.frame(mousename = mousename,swc = swc_dirs, traces = traces_dirs)
+    
+    ###set given parameters
+    result_df$cellline <- input_cellline
+    
+    result_df$pixel_width <- input_pixel_width
+    result_df$pixel_height <- input_pixel_height
+    result_df$pixel_depth <- input_pixel_depth
+    
+    result_df$pixel_unit <- input_pixel_unit
+    
+    result_df$is_swc_scaled <- input_swc_scaled
+    
+    
+    
+    
+    ##get cellfolders 
+    
+    
+    
+    cellfolder <- dirname(swc_dirs)
+    
+    if(roberttms == 1){
+      cellfolder <- dirname(dirname(swc_dirs))
+    }
+    
+    
+    result_df$cellfolder <- cellfolder
+    
+    ##cellnr, cellframe, cellid, id
+    cellnumber <- as.numeric(str_after_last(cellfolder, "cell"))
+    
+    
+    orig_cellnumber <- cellnumber
+    
+
+    cellnumber <- ceiling(cellnumber/2)
+    
+    
+    result_df$cellnr <- cellnumber
+    
+    
+    ordered_cellnumbers <- length(cellnumber)
+    
+    message(paste0("Amount of cells: ", ordered_cellnumbers))
+    
+    cellframe <- as.numeric(str_after_last(swcname_stump, "f"))
+    cellframe <- 0
+    
+    
+    
+    
+    result_df$cellframe <- NA
+    
+    result_df$cellframe[orig_cellnumber %% 2 == 0] <- 2
+    result_df$cellframe[orig_cellnumber %% 2 != 0] <- 1
+    
+    cellid <- paste0(mousename, "_", cellnumb er)
+    result_df$cellid <- cellid
+    
+    id <- paste0(cellid, "_", cellframe)
+    result_df$id <- id
+    
+    
+    
+    
+  
+    
+    somaimg_folder <- file.path(result_df$cellfolder)
+    
+ 
+    
+    somamask_tif <- NA
+    
+    result_df$somamask_tif <- somamask_tif
+    
+    somaraw_tif <- NA
+  
+    
+    result_df$somaraw_tif <- somaraw_tif
+    
+    
+    
+    ###get soma rois
+    
+    roifiles <- file.path(result_df$cellfolder,"soma.zip")
+    if (F %in% file.exists(roifiles)){
+      message("ERROR: not all soma zip files are existing")
+      break
+    } else{
+      message("CHECK: All soma zip files exist.")
+    }
+    
+    result_df$roi_groupz <- roifiles
+    
+    
+    ###get crops
+    
+    crop_raw <- file.path(somaimg_folder, "raw.tif")
+    
+
+    
+    result_df$crop_raw <- crop_raw
+    
+    result_df$crop_raw <- NA
+    
+    ##crop bounding box
+    
+    boundingbox_roi <- file.path(dirname(result_df$cellfolder), "bounds.zip")
+    
+    if (F %in% file.exists(boundingbox_roi)){
+      message("ERROR: not all boundingbox_roi are existing")
+      break
+    } else{
+      message("CHECK: All boundingbox_roi exist.")
+    }
+    
+    result_df$boundingbox_roi <- boundingbox_roi
+    
+    
+    result_df$hyperstack_directory <- file.path(stacks_folder, paste0(result_df$mousename, ".tif"))
+    
+    if (F %in% file.exists(boundingbox_roi)){
+      message("ERROR: not all hyperstack_directories are existing")
+      break
+    } else{
+      message("CHECK: All hyperstack_directories exist.")
+    }
+    
+    result_df$acquisition <- "singleframe_new"
+    
+    
+    message("extraction finished")
+    
+    
+    return(result_df)
+  }
+
+
+
+
+
+```
+
+
+
+
+
+
+```{r finishing up}
+
+
+
+#merge previously accumulated meta data files
+#meta_data <- rbind(md1, md2, md3, md4, md5, md6, md7, md8)
+
+
+
+#newly created folder to store swc files
+saving_folder <- "C:/Ole/20260721_CellClassification_v2/r_pipeline/20260724_r_pipeline_output"
+
+
+######STEP 1: read pixel size info, add soma/tm info and remove ","
+meta_data <- parseSWCFilesStepOne(meta_data, saving_folder)
+
+
+
+####CHECK PIXEL SIZES!!!!
+
+
+######STEP 2: correct wrong pixel sizes
+#######################################
+meta_data <- parseSWCFilesStepTwo(meta_data, saving_folder)
+
+
+####CHECK DATA!!!!
+View(meta_data)
+
+
+meta_data <- prepareColumns(meta_data)
+
+
+
+#check if all pixel units exist
+any(is.na(meta_data$pixel_width))
+any(is.na(meta_data$pixel_height))
+any(is.na(meta_data$pixel_depth))
+
+
+# Saving the updated metadata to a CSV file
+write.csv(meta_data, file.path(saving_folder, "meta_data.csv"), row.names = FALSE)
+
+```
+
+
+
+
+```{r multiframe function}
+getMetaData_multiframe <-  function(input_mousename, input_cellline, input_folder, input_pixel_width, input_pixel_height, input_pixel_depth, input_pixel_unit, input_swc_scaled, hyperstack_dir){
+    
+    message("starting extractions")
+    
+    mousename <- input_mousename
+    
+    #extract tm swc files
+    swc_dirs <- list.files(input_folder, recursive = T, pattern = "000.swc", full.names = T)
+    
+    
+    
+    
+    #correct for corrupt swc files
+    corrupt_swc_dirs <- list.files(input_folder, recursive = T, pattern = "001.swc", full.names = T)
+    swcname_stump <- str_before_last(swc_dirs, "-000.swc")
+    corrupt_swcname_stump <- str_before_last(corrupt_swc_dirs, "-001.swc")
+    
+    
+    swc_dirs <- swc_dirs[!swcname_stump %in% corrupt_swcname_stump]
+    
+
+    #get traces file
+    traces_dirs <- paste0(swcname_stump,".traces")
+    
+    
+    
+    
+    
+    if (F %in% file.exists(swc_dirs)){
+      message("ERROR: not all swc files are existing")
+      break
+    } else{
+      message("CHECK: All swc files exist.")
+    }
+    
+    
+    if (F %in% file.exists(traces_dirs)){
+      message("ERROR: not all traces files corresponding to swcs are existing")
+      break
+    } else{
+      message("CHECK: All traces files exist.")
+    }
+    
+    
+    
+    
+    ##initialize dataframe to save results
+    result_df <- data.frame(mousename = mousename,swc = swc_dirs, traces = traces_dirs)
+    
+    ###set given parameters
+    result_df$cellline <- input_cellline
+    
+    result_df$pixel_width <- input_pixel_width
+    result_df$pixel_height <- input_pixel_height
+    result_df$pixel_depth <- input_pixel_depth
+    
+    result_df$pixel_unit <- input_pixel_unit
+    
+    result_df$is_swc_scaled <- input_swc_scaled
+    
+    
+    
+    
+    
+    ##get cellfolders 
+    cellfolder <- dirname(dirname(swc_dirs))
+    result_df$cellfolder <- cellfolder
+    
+    ##cellnr, cellframe, cellid, id
+    cellnumber <- str_after_last(cellfolder, "cell")
+    result_df$cellnr <- cellnumber
+    
+    
+    ordered_cellnumbers <- length(as.numeric(unique(cellnumber)))
+    
+    message(paste0("Amount of cells: ", ordered_cellnumbers))
+    
+    cellframe <- as.numeric(str_after_last(swcname_stump, "f"))
+    result_df$cellframe <- cellframe
+    
+    cellid <- paste0(mousename, "_", cellnumber)
+    result_df$cellid <- cellid
+    
+    id <- paste0(cellid, "_", cellframe)
+    result_df$id <- id
+    
+    
+    
+    
+    ##speed files
+    speedfiles <- file.path(cellfolder, paste0("cell", cellnumber, "_robbisbewertungen.csv"))
+    
+ 
+    
+    if (F %in% file.exists(speedfiles)){
+      message("ERROR: not all speedfiles are existing")
+      break
+    } else{
+      message("CHECK: All speed files exist.")
+    }
+    
+    
+    
+    
+    ###delete cells where no speedfile is present
+    result_df <- result_df[file.exists(speedfiles),]
+    
+    new_speedfiles <- file.path(result_df$cellfolder, paste0("cell", result_df$cellnr, "_robbisbewertungen.csv"))
+    
+   
+    
+    
+    result_df$speed_csv <- new_speedfiles
+    
+    
+    #from here only use vectors from data frame!!!!
+    
+    ##get somaimages
+    
+    somaimg_folder <- file.path(result_df$cellfolder, "somaresults")
+    
+    somamask_tif <- file.path(somaimg_folder, paste0("f", result_df$cellframe, "_mask.tif"))
+    result_df$somamask_tif <- somamask_tif
+    
+    somaraw_tif <- file.path(somaimg_folder, paste0("f", result_df$cellframe, "_raw.tif"))
+    result_df$somaraw_tif <- somaraw_tif
+    
+    
+    
+    ###get soma rois
+    
+    roifiles <- file.path(result_df$cellfolder, paste0("cell", result_df$cellnr, "_boundaries.zip"))
+    result_df$roi_groupz <- roifiles
+    
+    
+    ###get crops
+    crop_raw <- file.path(result_df$cellfolder, paste0("cell", "_RAW.tif"))
+    result_df$crop_raw <- crop_raw
+    
+    crop_groupz <- file.path(result_df$cellfolder, paste0("cell", result_df$cellnr, ".tif"))
+    result_df$crop_groupz <- crop_groupz
+    
+    
+    ##crop bounding box
+    
+    boundingbox_roi <- file.path(result_df$cellfolder, paste0("cell", result_df$cellnr, "_cellcrop.zip"))
+    result_df$boundingbox_roi <- boundingbox_roi
+    
+    
+    result_df$hyperstack_directory <- hyperstack_dir
+    
+    result_df$acquisition <- "multiframe_raw"
+    
+    
+    message("extraction finished")
+    
+    
+    return(result_df)
+  }
+
+
+
+```
+
+```{r singlecell function}
+getMetaData_singlecell <- function(input_cellline, input_folder, mousename, input_pixel_width, input_pixel_height, input_pixel_depth, input_pixel_unit, input_swc_scaled, hyperstack_dir){
+    
+    roberttms <- 0
+    
+    
+    message("starting extractions")
+    
+    
+    
+    #extract tm swc files
+    swc_dirs <- list.files(input_folder, recursive = T, pattern = "000.swc", full.names = T)
+    
+    
+    
+    
+    #correct for corrupt swc files
+    corrupt_swc_dirs <- list.files(input_folder, recursive = T, pattern = "001.swc", full.names = T)
+    swcname_stump <- str_before_last(swc_dirs, "-000.swc")
+    corrupt_swcname_stump <- str_before_last(corrupt_swc_dirs, "-001.swc")
+    
+    
+    if(roberttms == 1){
+      swc_dirs <- swc_dirs[grepl("robert_traces", swc_dirs)]
+      
+      corrupt_swc_dirs <- list.files(input_folder, recursive = T, pattern = "001.swc", full.names = T)
+      corrupt_swc_dirs <- corrupt_swc_dirs[grepl("robert_traces", corrupt_swc_dirs)]
+      swcname_stump <- str_before_last(swc_dirs, "-000.swc")
+      corrupt_swcname_stump <- str_before_last(corrupt_swc_dirs, "-001.swc")
+    }
+    
+    
+    
+    swc_dirs <- swc_dirs[!swcname_stump %in% corrupt_swcname_stump]
+    
+    swcname_stump <- str_before_last(swc_dirs, "-000.swc")
+    
+    
+    #get traces file
+    traces_dirs <- paste0(swcname_stump,".traces")
+    
+    
+    
+    
+    
+    if (F %in% file.exists(swc_dirs)){
+      message("ERROR: not all swc files are existing")
+      break
+    } else{
+      message("CHECK: All swc files exist.")
+    }
+    
+    
+    if (F %in% file.exists(traces_dirs)){
+      message("ERROR: not all traces files corresponding to swcs are existing")
+      break
+    } else{
+      message("CHECK: All traces files exist.")
+    }
+    
+    
+    mousename <- mousename
+    
+
+    
+    if(roberttms == 1){
+      mousename <- basename(dirname(dirname(dirname(swc_dirs))))
+    }
+    
+    
+    ##initialize dataframe to save results
+    result_df <- data.frame(mousename = mousename,swc = swc_dirs, traces = traces_dirs)
+    
+    ###set given parameters
+    result_df$cellline <- input_cellline
+    
+    result_df$pixel_width <- input_pixel_width
+    result_df$pixel_height <- input_pixel_height
+    result_df$pixel_depth <- input_pixel_depth
+    
+    result_df$pixel_unit <- input_pixel_unit
+    
+    result_df$is_swc_scaled <- input_swc_scaled
+    
+    
+    
+    
+    ##get cellfolders 
+    
+    
+    
+    cellfolder <- dirname(swc_dirs)
+    
+    if(roberttms == 1){
+      cellfolder <- dirname(dirname(swc_dirs))
+    }
+    
+    
+    result_df$cellfolder <- cellfolder
+    
+    ##cellnr, cellframe, cellid, id
+    cellnumber <- str_after_last(cellfolder, "cell")
+    
+    
+    result_df$cellnr <- cellnumber
+    
+    
+    ordered_cellnumbers <- length(as.numeric(cellnumber))
+    
+    message(paste0("Amount of cells: ", ordered_cellnumbers))
+    
+    cellframe <- as.numeric(str_after_last(swcname_stump, "f"))
+    cellframe <- 0
+    result_df$cellframe <- cellframe
+    
+    cellid <- paste0(mousename, "_", cellnumber)
+    
+  
+    
+    result_df$cellid <- cellid
+    
+    id <- paste0(cellid, "_", cellframe)
+    result_df$id <- id
+    
+    
+    
+    
+    
+    #from here only use vectors from data frame!!!!
+    
+    ##get somaimages
+    
+    somaimg_folder <- file.path(result_df$cellfolder)
+    
+    #somaraw_tif <- file.path(somaimg_folder, "mask.tif")
+    
+    
+    #if (F %in% file.exists(somaraw_tif)){
+    #  message("ERROR: not all raw soma files are existing")
+    #  break
+    #} else{
+    #  message("CHECK: All raw soma files exist.")
+    #}
+    
+    somamask_tif <- NA
+    
+    result_df$somamask_tif <- somamask_tif
+    
+    somaraw_tif <- NA
+    
+    #somaraw_tif <- file.path(somaimg_folder, "raw.tif")
+    
+    #if (F %in% file.exists(somaraw_tif)){
+    #  message("ERROR: not all raw soma files are existing")
+    #  break
+    #} else{
+    #  message("CHECK: All raw soma files exist.")
+    #}
+    
+    
+    result_df$somaraw_tif <- somaraw_tif
+    
+    
+    
+    ###get soma rois
+    
+    roifiles <- file.path(result_df$cellfolder,"soma.zip")
+    if (F %in% file.exists(roifiles)){
+      message("ERROR: not all soma zip files are existing")
+      break
+    } else{
+      message("CHECK: All soma zip files exist.")
+    }
+    
+    result_df$roi_groupz <- roifiles
+    
+    
+    ###get crops
+    
+    crop_raw <- file.path(somaimg_folder, "raw.tif")
+    
+    if (F %in% file.exists(crop_raw)){
+      message("ERROR: not all raw tifs are existing")
+      break
+    } else{
+      message("CHECK: All raw tifs exist.")
+    }
+    
+    
+    
+    result_df$crop_raw <- crop_raw
+    
+    result_df$acquisition <- "singleframe_new"
+    
+    
+    ##crop bounding box
+    
+    boundingbox_roi <- file.path(result_df$cellfolder, "bounds.zip")    
+    if (F %in% file.exists(boundingbox_roi)){
+      message("ERROR: not all boundingbox_roi are existing")
+      break
+    } else{
+      message("CHECK: All boundingbox_roi exist.")
+    }
+    
+    result_df$boundingbox_roi <- boundingbox_roi
+    
+    result_df$hyperstack_directory <- hyperstack_dir
+    
+    if (F %in% file.exists(result_df$hyperstack_directory)){
+      message("ERROR: not all hyperstack_directories are existing")
+      break
+    } else{
+      message("CHECK: All hyperstack_directories exist.")
+    }
+    
+    
+    message("extraction finished")
+    
+    
+    return(result_df)
+}
+
+```
+
+```{r singlecell batch function}
+
+
+ getMetaData_singlecellBATCH  <- function(input_folder, stacks_folder, input_pixel_unit, input_swc_scaled){
+    
+    
+    
+    input_pixel_height <- NA
+    input_pixel_width <- NA
+    input_pixel_depth <- NA
+    
+    input_cellline <- NA
+    
+    roberttms <- 0
+    
+    
+    message("starting extractions")
+    
+    
+    
+    #extract tm swc files
+    swc_dirs <- list.files(input_folder, recursive = T, pattern = ".swc", full.names = T)
+    
+    
+    
+    
+    #correct for corrupt swc files
+    corrupt_swc_dirs <- list.files(input_folder, recursive = T, pattern = "001.swc", full.names = T)
+    swcname_stump <- str_before_last(swc_dirs, ".swc")
+    corrupt_swcname_stump <- str_before_last(corrupt_swc_dirs, "-001.swc")
+    
+    
+    if(roberttms == 1){
+      swc_dirs <- swc_dirs[grepl("robert_traces", swc_dirs)]
+      
+      corrupt_swc_dirs <- list.files(input_folder, recursive = T, pattern = "001.swc", full.names = T)
+      corrupt_swc_dirs <- corrupt_swc_dirs[grepl("robert_traces", corrupt_swc_dirs)]
+      swcname_stump <- str_before_last(swc_dirs, ".swc")
+      corrupt_swcname_stump <- str_before_last(corrupt_swc_dirs, "-001.swc")
+    }
+    
+    
+    
+    swc_dirs <- swc_dirs[!swcname_stump %in% corrupt_swcname_stump]
+    
+    swcname_stump <- str_before_last(swc_dirs, ".swc")
+    
+    
+    #get traces file
+    traces_dirs <- paste0(swcname_stump,".traces")
+    
+    
+    
+    
+    
+    if (F %in% file.exists(swc_dirs)){
+      message("ERROR: not all swc files are existing")
+      break
+    } else{
+      message("CHECK: All swc files exist.")
+    }
+    
+    
+    if (F %in% file.exists(traces_dirs)){
+      message("ERROR: not all traces files corresponding to swcs are existing")
+      break
+    } else{
+      message("CHECK: All traces files exist.")
+    }
+    
+    
+    mousename <- basename(dirname(dirname(swc_dirs)))
+    
+
+    
+    if(roberttms == 1){
+      mousename <- basename(dirname(dirname(dirname(swc_dirs))))
+    }
+    
+    
+    ##initialize dataframe to save results
+    result_df <- data.frame(mousename = mousename,swc = swc_dirs, traces = traces_dirs)
+    
+    ###set given parameters
+    result_df$cellline <- input_cellline
+    
+    result_df$pixel_width <- input_pixel_width
+    result_df$pixel_height <- input_pixel_height
+    result_df$pixel_depth <- input_pixel_depth
+    
+    result_df$pixel_unit <- input_pixel_unit
+    
+    result_df$is_swc_scaled <- input_swc_scaled
+    
+    
+    
+    
+    ##get cellfolders 
+    
+    
+    
+    cellfolder <- dirname(swc_dirs)
+    
+    if(roberttms == 1){
+      cellfolder <- dirname(dirname(swc_dirs))
+    }
+    
+    
+    result_df$cellfolder <- cellfolder
+    
+    ##cellnr, cellframe, cellid, id
+    cellnumber <- str_after_last(cellfolder, "cell")
+    result_df$cellnr <- cellnumber
+    
+    
+    ordered_cellnumbers <- length(cellnumber)
+    
+    message(paste0("Amount of cells: ", ordered_cellnumbers))
+    
+    cellframe <- as.numeric(str_after_last(swcname_stump, "f"))
+    cellframe <- 0
+    result_df$cellframe <- cellframe
+    
+    cellid <- paste0(mousename, "_", cellnumber)
+    result_df$cellid <- cellid
+    
+    id <- paste0(cellid, "_", cellframe)
+    result_df$id <- id
+    
+    
+    
+    
+  
+    
+    somaimg_folder <- file.path(result_df$cellfolder)
+    
+ 
+    
+    somamask_tif <- NA
+    
+    result_df$somamask_tif <- somamask_tif
+    
+    somaraw_tif <- NA
+  
+    
+    result_df$somaraw_tif <- somaraw_tif
+    
+    
+    
+    ###get soma rois
+    
+    roifiles <- file.path(result_df$cellfolder,"soma.zip")
+    if (F %in% file.exists(roifiles)){
+      message("ERROR: not all soma zip files are existing")
+      break
+    } else{
+      message("CHECK: All soma zip files exist.")
+    }
+    
+    result_df$roi_groupz <- roifiles
+    
+    
+    ###get crops
+    
+    crop_raw <- file.path(somaimg_folder, "raw.tif")
+    
+
+    
+    result_df$crop_raw <- crop_raw
+    
+    result_df$crop_raw <- NA
+    
+    ##crop bounding box
+    
+    boundingbox_roi <- file.path(dirname(result_df$cellfolder), "bounds.zip")
+    
+    if (F %in% file.exists(boundingbox_roi)){
+      message("ERROR: not all boundingbox_roi are existing")
+      break
+    } else{
+      message("CHECK: All boundingbox_roi exist.")
+    }
+    
+    result_df$boundingbox_roi <- boundingbox_roi
+    
+    
+    result_df$hyperstack_directory <- file.path(stacks_folder, paste0(result_df$mousename, ".tif"))
+    
+    if (F %in% file.exists(boundingbox_roi)){
+      message("ERROR: not all hyperstack_directories are existing")
+      break
+    } else{
+      message("CHECK: All hyperstack_directories exist.")
+    }
+    
+    result_df$acquisition <- "singleframe_new"
+    
+    
+    message("extraction finished")
+    
+    
+    return(result_df)
+  }
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

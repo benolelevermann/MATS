@@ -1,0 +1,589 @@
+---
+title: "scEvoView Pipeline (Streamlined v2)"
+author: "Robert Denninger / Felix Kaiser"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# ============================================================
+# USER SETTINGS - NUR HIER AENDERUNGEN VORNEHMEN
+# ============================================================
+
+```{r USER SETTINGS}
+
+# --- Bundle-Pfade (relativ zu diesem Skript) ---
+bundle_root <- "X:\\Felix\\scripts\\robertpipeline\\scEvoView_pipeline_bundle"
+r_package2    <- file.path(bundle_root, "r_package2")
+scevoview_pkg <- file.path(bundle_root, "scEvoView")
+code_dir      <- bundle_root   # enthaelt Lmv5.3/
+base_evo_path <- file.path(bundle_root, "reference", "v_250323_baseline_final_v28.rds")
+inference_path <- file.path(bundle_root, "reference", "Final_Inference_System.RData")
+
+# --- Experiment ---
+mousename        <- "invitro"
+cellline         <- "S24"
+acquisition_mode <- "singlecellBATCH_percell"   # "multiframe" | "singlecell" | "singlecellBATCH" | "singlecellBATCH_percell"
+
+# --- Eingabe / Ausgabe ---
+cell_folder  <- "C:/Ole/20260721_CellClassification_v2/20260817_TrogoCellStateTest/07_evo_cells_matrix_forest_inspired"
+output_dir   <- "C:/Ole/20260721_CellClassification_v2/20260817_TrogoCellStateTest/09_output"
+stack_directory <- "C:/Ole/20260721_CellClassification_v2/20260817_TrogoCellStateTest/07_evo_cells_matrix_forest_inspired"  # nur fuer multiframe/singlecell/singlecellBATCH
+
+# --- Pixelgroessen ---
+pixel_width   <- 0.2875008
+pixel_height  <- 0.2875011
+pixel_depth   <- 1
+pixel_unit    <- "microns"
+is_swc_scaled <- FALSE
+
+
+# --- Multiframe: Speedfiles optional ---
+use_speedfiles <- FALSE   # TRUE = cell*_robbisbewertungen.csv erforderlich
+
+# --- Experiment-Labels ---
+label_human     <- 0
+label_em        <- 0
+label_batch     <- "justsingleframe"
+label_rt_exp    <- 0
+label_surviving <- 0
+label_post_rt   <- 0
+
+```
+
+# ============================================================
+# PHASE 0 - Libraries & Packages laden
+# ============================================================
+
+```{r Phase 0: Versionscheck}
+
+# Erwartete Paketversionen (Referenz-Setup). Abweichungen -> nur Warnung.
+required_pkg_versions <- c(
+  stringr            = "1.5.1",
+  strex              = "1.6.0",
+  devtools           = "2.4.5",
+  crayon             = "1.5.2",
+  dplyr              = "1.1.4",
+  ggplot2            = "3.5.1",
+  spatstat           = "3.0-3",
+  RImageJROI         = "0.1.2",
+  matlib             = "0.9.6",
+  StereoMorph        = "1.6.7",
+  misc3d             = "0.9-1",
+  oce                = "1.7-10",
+  sf                 = "1.0-12",
+  sp                 = "1.6-0",
+  ks                 = "1.14.0",
+  reticulate         = "1.37.0",
+  smoothr            = "1.0.1",
+  concaveman         = "1.1.0",
+  viridis            = "0.6.5",
+  pbapply            = "1.7-2",
+  patchwork          = "1.2.0",
+  DelayedMatrixStats = "1.16.0",
+  randomForest       = "4.7-1.1",
+  xgboost            = "1.6.0.1"
+)
+
+# Verhalten: Versionsabweichungen werden nur als WARNUNG gemeldet (kein Stopp).
+# Harter Stopp NUR, wenn nat die Funktion sholl_analysis() nicht bereitstellt,
+# da sonst die Feature Extraction fuer jede Zelle fehlschlaegt.
+
+missing_pkgs  <- character(0)
+version_probs <- character(0)
+
+for (pkg in names(required_pkg_versions)) {
+  want <- required_pkg_versions[[pkg]]
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    missing_pkgs <- c(missing_pkgs, sprintf("  - %s (erwartet: %s) NICHT installiert", pkg, want))
+    next
+  }
+  have <- as.character(utils::packageVersion(pkg))
+  if (have != want) {
+    version_probs <- c(version_probs,
+      sprintf("  - %s: installiert %s, erwartet %s", pkg, have, want))
+  }
+}
+
+if (length(missing_pkgs)) {
+  warning(sprintf("Paket-Versionscheck: %d Paket(e) nicht installiert:\n%s",
+                  length(missing_pkgs), paste(missing_pkgs, collapse = "\n")),
+          call. = FALSE, immediate. = TRUE)
+}
+if (length(version_probs)) {
+  warning(sprintf("Paket-Versionscheck: %d Versionsabweichung(en) (nur Hinweis, kein Stopp):\n%s",
+                  length(version_probs), paste(version_probs, collapse = "\n")),
+          call. = FALSE, immediate. = TRUE)
+}
+if (!length(missing_pkgs) && !length(version_probs)) {
+  message("CHECK: Alle Paketversionen stimmen mit den Vorgaben ueberein.")
+} else {
+  message("CHECK: Versionsabweichungen gemeldet (siehe Warnungen) - Pipeline laeuft weiter.")
+}
+
+# nat-Sonderfall (HARTER STOPP): benoetigt wird die natverse-Version mit sholl_analysis().
+# Die CRAN-Version enthaelt sholl_analysis nicht -> Feature Extraction schlaegt fehl.
+if (!requireNamespace("nat", quietly = TRUE)) {
+  stop("FEHLER: 'nat' ist nicht installiert. Benoetigt wird die natverse-Version mit sholl_analysis():\n  install.packages('nat', repos = c('https://natverse.r-universe.dev', 'https://cloud.r-project.org'))")
+} else if (!("sholl_analysis" %in% ls(getNamespace("nat")))) {
+  stop(sprintf(
+    "FEHLER: nat %s enthaelt KEINE sholl_analysis() -> Feature Extraction wuerde fuer jede Zelle fehlschlagen.\nInstalliere die natverse-Version:\n  install.packages('nat', repos = c('https://natverse.r-universe.dev', 'https://cloud.r-project.org'))",
+    as.character(utils::packageVersion("nat"))))
+}
+
+message("CHECK: nat stellt sholl_analysis() bereit.")
+
+```
+
+```{r Phase 0: Packages}
+
+suppressPackageStartupMessages({
+  library(cli); library(nat); library(ggplot2); library(spatstat)
+  library(RImageJROI); library(dplyr); library(tidyr); library(matlib)
+  library(StereoMorph); library(misc3d); library(oce); library(sf)
+  library(sp); library(ks); library(reticulate); library(stringr)
+  library(strex); library(smoothr); library(concaveman); library(crayon)
+  library(viridis); library(pbapply); library(ggpubr); library(patchwork)
+  library(DelayedMatrixStats); library(devtools)
+})
+source("C:/Ole/20260721_CellClassification_v2/nat_igraph_compatibility.R")
+if (!dir.exists(scevoview_pkg)) stop(sprintf("FEHLER: scEvoView nicht gefunden: %s", scevoview_pkg))
+if (!dir.exists(r_package2))    stop(sprintf("FEHLER: r_package2 nicht gefunden: %s", r_package2))
+if (!file.exists(base_evo_path)) stop(sprintf("FEHLER: base_evo nicht gefunden: %s", base_evo_path))
+if (!file.exists(inference_path)) stop(sprintf("FEHLER: Inference-System nicht gefunden: %s", inference_path))
+
+load_all(scevoview_pkg)
+load_all(r_package2)
+source(file.path(bundle_root, "load_pipeline_extensions.R"))
+loadPipelineExtensions(r_package2)
+
+dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+message("CHECK: Alle Packages + V2-Erweiterungen geladen.")
+message(sprintf("CHECK: output_dir = %s", output_dir))
+
+```
+
+# ============================================================
+# PHASE 1 - Metadaten vorbereiten (V2: melden + ausschliessen)
+# ============================================================
+
+```{r Phase 1: Metadaten}
+
+if (!dir.exists(cell_folder))
+  stop(sprintf("FEHLER: cell_folder existiert nicht: %s", cell_folder))
+
+if (acquisition_mode == "multiframe") {
+  if (!file.exists(stack_directory))
+    stop(sprintf("FEHLER: stack_directory existiert nicht: %s", stack_directory))
+  meta_data <- getMetaData_multiframe_v2(
+    mousename, cellline, cell_folder,
+    pixel_width, pixel_height, pixel_depth,
+    pixel_unit, is_swc_scaled, stack_directory,
+    use_speedfiles = use_speedfiles
+  )
+} else if (acquisition_mode == "singlecell") {
+  if (!file.exists(stack_directory))
+    stop(sprintf("FEHLER: stack_directory existiert nicht: %s", stack_directory))
+  meta_data <- getMetaData_singlecell_v2(
+    cellline, cell_folder, mousename,
+    pixel_width, pixel_height, pixel_depth,
+    pixel_unit, is_swc_scaled, stack_directory
+  )
+} else if (acquisition_mode == "singlecellBATCH") {
+  if (!dir.exists(stack_directory))
+    stop(sprintf("FEHLER: stacks_folder existiert nicht: %s", stack_directory))
+  meta_data <- getMetaData_singlecellBATCH_v2(
+    cell_folder, stack_directory,
+    pixel_unit, is_swc_scaled
+  )
+  meta_data$cellline <- cellline
+  if (!is_swc_scaled) {
+    meta_data$pixel_width  <- pixel_width
+    meta_data$pixel_height <- pixel_height
+    meta_data$pixel_depth  <- pixel_depth
+  }
+} else if (acquisition_mode == "singlecellBATCH_percell") {
+  meta_data <- getMetaData_singlecellBATCH_percell_v2(
+    cell_folder,
+    pixel_unit, is_swc_scaled
+  )
+  meta_data$cellline <- cellline
+  if (!is_swc_scaled) {
+    meta_data$pixel_width  <- pixel_width
+    meta_data$pixel_height <- pixel_height
+    meta_data$pixel_depth  <- pixel_depth
+  }
+} else {
+  stop(sprintf(
+    "FEHLER: Unbekannter acquisition_mode '%s'. Erlaubt: multiframe, singlecell, singlecellBATCH, singlecellBATCH_percell",
+    acquisition_mode
+  ))
+}
+
+meta_data$human           <- label_human
+meta_data$em              <- label_em
+meta_data$batch           <- label_batch
+meta_data$rt_experiment   <- label_rt_exp
+meta_data$is_surviving_rt <- label_surviving
+meta_data$post_rt         <- label_post_rt
+
+message(sprintf("CHECK: %d Zellen in meta_data nach V2-Filter.", nrow(meta_data)))
+
+```
+
+```{r Phase 1: SWC Parsing}
+
+meta_data <- parseSWCFilesStepOne(meta_data, output_dir)
+
+message("CHECK: Pixelgroessen aus SWC Header:")
+message(sprintf("  pixel_width  - erwartet: %.3f, gelesen: %s",
+  pixel_width,  paste(unique(round(meta_data$pixel_width_real,  4)), collapse = ", ")))
+message(sprintf("  pixel_height - erwartet: %.3f, gelesen: %s",
+  pixel_height, paste(unique(round(meta_data$pixel_height_real, 4)), collapse = ", ")))
+message(sprintf("  pixel_depth  - erwartet: %.3f, gelesen: %s",
+  pixel_depth,  paste(unique(round(meta_data$pixel_depth_real,  4)), collapse = ", ")))
+
+if (any(is.na(meta_data$pixel_width)))
+  stop("FEHLER: pixel_width enthaelt NAs - bitte manuell setzen.")
+if (any(is.na(meta_data$pixel_height)))
+  stop("FEHLER: pixel_height enthaelt NAs - bitte manuell setzen.")
+if (any(is.na(meta_data$pixel_depth)))
+  stop("FEHLER: pixel_depth enthaelt NAs - bitte manuell setzen.")
+
+meta_data <- parseSWCFilesStepTwo(meta_data, output_dir)
+meta_data <- prepareColumns(meta_data)
+
+write.csv(meta_data, file.path(output_dir, "meta_data.csv"), row.names = FALSE)
+message(sprintf("CHECK: meta_data.csv gespeichert (%d Zeilen).", nrow(meta_data)))
+
+```
+
+# ============================================================
+# PHASE 2 - Feature Extraction
+# ============================================================
+
+```{r Phase 2: Feature Extraction}
+
+featEx <- newFeatureExtraction(name = "FeatureExtraction", code_dir)
+featEx <- addSaveDir(featEx, output_dir)
+featEx <- addMetaData(featEx, meta_data)
+
+checkFilePaths(featEx)
+checkMetaData(featEx)
+message(sprintf("CHECK: %d eindeutige IDs in featEx.", length(unique(featEx@meta_data$id))))
+
+options(warn = -1)
+featEx <- runFeatureExtraction_NEW(featEx)
+featEx <- saveObjectWithoutMerging(featEx, output_dir)
+message(sprintf("CHECK: Feature Extraction abgeschlossen: %s", output_dir))
+
+```
+
+# ============================================================
+# PHASE 2b - Optional: Mehrere Extraktionen zusammenfuehren
+# ============================================================
+
+```{r Phase 2b: Merge optional, eval=FALSE}
+
+# feature_extraction_dirs <- c(
+#   "Y:/Pfad/Extraction_2026-01-01_...",
+#   "Y:/Pfad/Extraction_2026-01-02_..."
+# )
+# mergeFeatureExtractions(feature_extraction_dirs, output_dir)
+
+```
+
+# ============================================================
+# PHASE 3 - evo-Objekt aufbauen
+# ============================================================
+
+```{r Phase 3: evo aufbauen}
+
+extraction_dirs <- list.dirs(output_dir, recursive = FALSE)
+extraction_dirs <- extraction_dirs[grepl("Extraction_", basename(extraction_dirs))]
+
+if (length(extraction_dirs) == 0)
+  stop(sprintf("FEHLER: Kein Extraction_* Ordner in: %s", output_dir))
+
+input_dir <- extraction_dirs[length(extraction_dirs)]
+message(sprintf("CHECK: Lade Extraktion aus: %s", input_dir))
+
+data     <- loadExtractionData(directory = input_dir)
+base_evo <- readRDS(base_evo_path)
+
+evo <- setupEvoObject("inVitro")
+evo <- loadMetadata(evo, data@meta_data_dir)
+evo <- loadMorphData(evo, data@features_dir)
+
+
+
+
+if ("custom.higherorder_length_min" %in% colnames(evo@morph_full)) {
+  evo@morph_full$custom.higherorder_length_min <- NULL
+}
+
+evo <- loadTracesAndShapes(
+  evo,
+  tm_data_path   = data@tm_coordinates_dir,
+  soma_data_path = data@soma_coordinates_dir
+)
+
+# Die erfolgreich extrahierten IDs stehen in den Row-Namen von morph_full.
+feature_ids  <- rownames(evo@morph_full)
+metadata_ids <- as.character(evo@meta.data$id)
+
+if (
+  length(feature_ids) != nrow(evo@morph_full) ||
+  anyNA(feature_ids) ||
+  any(feature_ids == "") ||
+  anyDuplicated(feature_ids)
+) {
+  stop("FEHLER: Die Row-Namen von morph_full sind keine eindeutigen Zell-IDs.")
+}
+
+keep_ids <- feature_ids[feature_ids %in% metadata_ids]
+
+if (!length(keep_ids)) {
+  stop("FEHLER: Keine gemeinsamen IDs zwischen morph_full und meta.data.")
+}
+
+# Zellen dokumentieren, für die keine Feature-Zeile erzeugt wurde.
+excluded_cells <- evo@meta.data[
+  !(metadata_ids %in% keep_ids),
+  ,
+  drop = FALSE
+]
+
+excluded_cells$exclusion_reason <-
+  "No usable morphology feature row after feature extraction"
+
+write.csv(
+  excluded_cells,
+  file.path(output_dir, "excluded_unextractable_cells.csv"),
+  row.names = FALSE
+)
+
+# morph_full und Metadaten auf dieselben 82 Zellen ausrichten.
+evo@morph_full <- evo@morph_full[
+  keep_ids,
+  ,
+  drop = FALSE
+]
+
+evo@meta.data <- evo@meta.data[
+  match(keep_ids, metadata_ids),
+  ,
+  drop = FALSE
+]
+
+stopifnot(
+  identical(
+    rownames(evo@morph_full),
+    as.character(evo@meta.data$id)
+  )
+)
+
+message(sprintf(
+  "CHECK: %d Zellen behalten, %d nicht extrahierbare Zellen ausgeschlossen.",
+  length(keep_ids),
+  nrow(excluded_cells)
+))
+
+
+message(sprintf("CHECK: evo Objekt mit %d Zellen aufgebaut.", nrow(evo@meta.data)))
+
+```
+
+# ============================================================
+# PHASE 4 - PCA-Mapping + Inference (neues System)
+# ============================================================
+
+```{r Phase 4: Inference Mapping}
+
+evo <- runInferenceMapping(evo, base_evo, inference_path)
+
+morph_data    <- evo@morph_mtx
+morph_data$id <- rownames(morph_data)
+evo@meta.data <- merge_meta_sort(evo@meta.data, morph_data, by = "id")
+
+```
+
+# ============================================================
+# PHASE 5 - Objekt speichern
+# ============================================================
+
+```{r Phase 5: Speichern}
+
+saveRDS(evo, file.path(output_dir, "evoObject.rds"))
+message(sprintf("CHECK: evoObject.rds gespeichert: %s", file.path(output_dir, "evoObject.rds")))
+```
+
+# ============================================================
+# PHASE 6 - Plots (PNG + SVG)
+# ============================================================
+
+```{r Phase 6: Plots}
+
+plot_dir <- file.path(output_dir, "plots")
+dir.create(plot_dir, showWarnings = FALSE, recursive = TRUE)
+
+p_pca <- ggplot() +
+  geom_point(data = base_evo@meta.data, aes(PC1, PC2),
+             color = "grey85", size = 0.5, alpha = 0.5) +
+  geom_point(data = evo@meta.data, aes(PC1, PC2),
+             color = "red", size = 1.2, alpha = 0.8) +
+  coord_fixed() +
+  theme_minimal() +
+  labs(title = sprintf("%s - Cells on Reference PCA", mousename))
+print(p_pca)
+
+p_diff <- ggplot() +
+  geom_point(data = base_evo@meta.data, aes(PC1, PC2),
+             color = "grey85", size = 0.5, alpha = 0.5) +
+  geom_point(data = evo@meta.data %>% dplyr::filter(!is.na(diffscore)),
+             aes(PC1, PC2, color = diffscore),
+             size = 1.2, alpha = 0.8) +
+  scale_color_viridis_c(option = "plasma", direction = -1, limits = c(0, 1)) +
+  coord_fixed() +
+  theme_minimal() +
+  labs(title = sprintf("%s - DiffScore on Reference PCA", mousename),
+       color = "DiffScore")
+print(p_diff)
+ggsave(file.path(plot_dir, "pca_overlay.png"), p_pca, width = 8, height = 8, dpi = 300)
+ggsave(file.path(plot_dir, "pca_overlay.svg"), p_pca, width = 8, height = 8)
+ggsave(file.path(plot_dir, "diffscore_overlay.png"), p_diff, width = 8, height = 8, dpi = 300)
+ggsave(file.path(plot_dir, "diffscore_overlay.svg"), p_diff, width = 8, height = 8)
+
+message(sprintf("CHECK: Plots gespeichert in: %s", plot_dir))
+print(p_pca)
+print(p_diff)
+
+
+
+
+
+View(evo)
+
+print(evo@meta.data$PC1)
+# ============================================================
+# Bleb vs DMSO: PCA- und DiffScore-Vergleich
+# ============================================================
+
+# Einmal prüfen, wie die Bedingungen tatsächlich geschrieben sind:
+bleb_dmso <- evo@meta.data %>%
+  dplyr::mutate(
+    treatment = dplyr::case_when(
+      grepl("PBS", mousename, ignore.case = TRUE) ~ "PBS",
+      grepl("Syn", mousename, ignore.case = TRUE) ~ "Syn",
+      TRUE ~ NA_character_
+    ),
+    treatment = factor(treatment, levels = c("PBS", "Syn"))
+  ) %>%
+  dplyr::filter(!is.na(treatment), !is.na(diffscore))
+
+print(table(bleb_dmso$treatment))
+print(table(bleb_dmso$treatment))
+
+
+p_pca_bleb_dmso <- ggplot() +
+  geom_point(
+    data = base_evo@meta.data,
+    aes(PC1, PC2),
+    color = "grey85",
+    size = 0.5,
+    alpha = 0.5
+  ) +
+  geom_point(
+    data = bleb_dmso,
+    aes(PC1, PC2, color = treatment),
+    size = 1.8,
+    alpha = 0.85
+  ) +
+  scale_color_manual(
+    values = c(
+      "DMSO" = "grey35",
+      "Blebbistatin" = "red"
+    )
+  ) +
+  coord_fixed() +
+  theme_minimal() +
+  labs(
+    title = "Blebbistatin vs DMSO on Reference PCA",
+    color = "Treatment"
+  )
+
+print(p_pca_bleb_dmso)
+# ============================================================
+# PC1: Blebbistatin vs DMSO
+# ============================================================
+
+pc1_data <- bleb_dmso %>%
+  dplyr::filter(!is.na(PC1))
+
+# Statistischer Test und Ausgabe
+pc1_test <- wilcox.test(PC1 ~ treatment, data = pc1_data)
+print(pc1_test)
+
+p_pc1_bleb_dmso <- ggplot(
+  pc1_data,
+  aes(x = treatment, y = PC1, fill = treatment)
+) +
+  geom_boxplot(
+    width = 0.65,
+    outlier.shape = NA,
+    color = "grey20",
+    linewidth = 0.8,
+    alpha = 0.65
+  ) +
+  geom_jitter(
+    aes(color = treatment),
+    width = 0.14,
+    size = 1.7,
+    alpha = 0.65
+  ) +
+  ggpubr::stat_compare_means(
+    comparisons = list(c("DMSO", "Blebbistatin")),
+    method = "wilcox.test",
+    label = "p.format"
+  ) +
+  scale_fill_manual(
+    values = c(
+      "DMSO" = "#F8766D",
+      "Blebbistatin" = "#00BFC4"
+    )
+  ) +
+  scale_color_manual(
+    values = c(
+      "DMSO" = "grey20",
+      "Blebbistatin" = "grey20"
+    )
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    legend.position = "none",
+    panel.grid.minor = element_blank()
+  ) +
+  labs(
+    title = "ROCKiValidation - PC1: Blebbistatin vs DMSO",
+    x = NULL,
+    y = "PC1"
+  )
+
+print(p_pc1_bleb_dmso)
+ggsave(
+  file.path(plot_dir, "PC1_Blebbistatin_vs_DMSO.png"),
+  p_pc1_bleb_dmso,
+  width = 6,
+  height = 6,
+  dpi = 300
+)
+
+
+```
+
+

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f2f0e9">
+  <title>Dataset139 · Trainingsdaten-Inspektor</title>
+  <meta name="description" content="Originale, vorverarbeitete und augmentierte Dataset139-Trainingsdaten vergleichen.">
+  <link rel="stylesheet" href="/dataset-inspector.css?v=20260901b">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="/">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>Single Cell Extractor</span>
+      </a>
+      <nav><a href="/">Zell-Review</a><strong>Trainingsdaten</strong></nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <div class="eyebrow">DATASET 139 / TRANSPARENTE PIPELINE</div>
+          <h1>Sieh genau, was das Netz <em>wirklich bekommt.</em></h1>
+          <p>Vergleiche jedes Rohbild mit dem gespeicherten Preprocessing und einer echten label-sicheren Trainingsaugmentation. Freie Rotation und Skalierung sind deaktiviert, damit 1‑px-Skeletons nicht interpoliert und unterbrochen werden.</p>
+        </div>
+        <div class="legend" aria-label="Farblegende">
+          <span><i class="skeleton"></i>Skeleton · Klasse 1</span>
+          <span><i class="soma"></i>Soma · Klasse 2</span>
+          <span><i class="padding"></i>künstliches Padding</span>
+        </div>
+      </section>
+
+      <div class="loading-banner" id="loading-banner">Dataset139 wird eingelesen …</div>
+      <div class="error-banner" id="error-banner" hidden></div>
+
+      <section class="summary-section" id="summary-section" hidden>
+        <div class="section-title">
+          <div><div class="kicker">DATENSATZ AUF EINEN BLICK</div><h2>Größen, Splits und Padding</h2></div>
+          <button class="secondary-button" id="csv-button" type="button">Gefilterte Liste als CSV</button>
+        </div>
+        <div class="summary-grid">
+          <article><span>ALLE FÄLLE</span><strong id="summary-total">–</strong><small id="summary-split">–</small></article>
+          <article><span>MEDIANGRÖSSE</span><strong id="summary-size">–</strong><small id="summary-range">–</small></article>
+          <article><span>MIT PADDING</span><strong id="summary-padded">–</strong><small id="summary-padding-mean">–</small></article>
+          <article><span>LEERE LABEL</span><strong id="summary-empty">–</strong><small>Skeleton / Soma</small></article>
+        </div>
+        <div class="distribution-grid">
+          <article>
+            <h3>Größte Bildseite</h3>
+            <div class="bar-list" id="size-distribution"></div>
+          </article>
+          <article>
+            <h3>Größenbedingtes Padding bei 160 × 160</h3>
+            <div class="bar-list padding-bars" id="padding-distribution"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="flow-section" id="flow-section" hidden>
+        <div class="section-title compact">
+          <div><div class="kicker">VERARBEITUNGSWEG</div><h2>Vom TIFF bis zum Netzinput</h2></div>
+          <button class="text-button" id="toggle-details" type="button" aria-expanded="false">Details anzeigen</button>
+        </div>
+        <ol class="pipeline-flow" id="pipeline-flow"></ol>
+        <div class="preprocessing-details" id="preprocessing-details" hidden></div>
+      </section>
+
+      <section class="explorer" id="explorer" hidden>
+        <div class="section-title">
+          <div><div class="kicker">EINZELFÄLLE VERGLEICHEN</div><h2>Original ↔ tatsächliches Training</h2></div>
+          <div class="keyboard-help"><kbd>←</kbd><kbd>→</kbd> Fall wechseln · <kbd>R</kbd> neue Augmentation</div>
+        </div>
+
+        <div class="filter-bar">
+          <label>Suche<input id="search-input" type="search" placeholder="Fall oder Herkunft"></label>
+          <label>Quelle<select id="collection-filter"><option value="all">Alle Quellen</option></select></label>
+          <label>Split<select id="split-filter"><option value="all">Training + Validierung</option><option value="training">Training</option><option value="validation">Validierung</option></select></label>
+          <label>Größen-Padding<select id="padding-filter"><option value="all">Alle</option><option value="none">Kein Padding</option><option value="low">0–25 %</option><option value="medium">25–50 %</option><option value="high">50–75 %</option><option value="very-high">Über 75 %</option></select></label>
+          <label>Sortierung<select id="sort-select"><option value="case">Fallnummer</option><option value="size-desc">Größe absteigend</option><option value="size-asc">Größe aufsteigend</option><option value="padding-desc">Padding absteigend</option><option value="skeleton-desc">Skeletonpixel absteigend</option></select></label>
+        </div>
+
+        <div class="explorer-layout">
+          <aside class="case-browser">
+            <div class="case-browser-heading"><strong id="visible-count">0 Fälle</strong><small>Ein Fall auswählen</small></div>
+            <div class="case-list" id="case-list"></div>
+            <button class="secondary-button load-more" id="load-more" type="button" hidden>Weitere Fälle anzeigen</button>
+          </aside>
+
+          <article class="case-detail">
+            <div class="detail-heading">
+              <div>
+                <div class="kicker" id="detail-origin">–</div>
+                <h2 id="detail-case">Fall auswählen</h2>
+                <p id="detail-source">–</p>
+              </div>
+              <div class="detail-actions">
+                <button class="secondary-button" id="previous-case" type="button">← Vorheriger</button>
+                <button class="primary-button" id="new-augmentation" type="button">Neue Trainingsvariante</button>
+                <button class="secondary-button" id="next-case" type="button">Nächster →</button>
+              </div>
+            </div>
+
+            <div class="case-metrics" id="case-metrics"></div>
+
+            <div class="view-grid" id="view-grid" aria-live="polite">
+              <figure>
+                <figcaption><strong>1 · Rohbild</strong><span>Unveränderte TIFF-Intensitäten</span></figcaption>
+                <div class="image-frame"><img id="view-raw" alt="Rohbild des ausgewählten Trainingsfalls"></div>
+                <small id="raw-stats">–</small>
+              </figure>
+              <figure>
+                <figcaption><strong>2 · Original-Annotation</strong><span>Klassen 1 und 2 auf dem Rohbild</span></figcaption>
+                <div class="image-frame"><img id="view-raw-label" alt="Rohbild mit Originalannotation"></div>
+                <small id="raw-label-stats">–</small>
+              </figure>
+              <figure>
+                <figcaption><strong>3 · Nach Preprocessing</strong><span>Z-Score, gespeicherte Netzvorlage</span></figcaption>
+                <div class="image-frame"><img id="view-preprocessed" alt="Vorverarbeitetes Bild mit Label"></div>
+                <small id="preprocessed-stats">–</small>
+              </figure>
+              <figure class="training-view">
+                <figcaption><strong>4 · Echter LabelSafe-Trainingsinput</strong><span>Patch, Padding, Rot90 und Spiegelung</span></figcaption>
+                <div class="image-frame"><img id="view-training" alt="Augmentierter tatsächlicher Netzinput"></div>
+                <small id="training-stats">–</small>
+              </figure>
+            </div>
+
+            <details class="provenance">
+              <summary>Herkunft und technische Pfade</summary>
+              <dl id="provenance-list"></dl>
+            </details>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer><span>Dataset139 · nur lesende Kontrolle</span><span>Daten bleiben lokal auf diesem Rechner.</span></footer>
+  </div>
+  <script src="/dataset-inspector.js?v=20260901c"></script>
+</body>
+</html>

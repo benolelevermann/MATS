@@ -1,0 +1,290 @@
+---
+title: "setupNewScEvoViewObject"
+author: "Robert Denninger"
+date: '2024-05-16'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load package}
+base_evo <- readRDS("X:/Robert_temp/data_combined/result_tables/v_240516_baseline/v_240519_baseline_v8.rds")
+
+#library(reticulate)
+#library(leiden)
+#library(Seurat)
+library(strex)
+#library(ComplexHeatmap)
+library(viridis)
+library(ggplot2)
+library(pbapply)
+library(dplyr)
+library(ggpubr)
+library(stringr)
+library(patchwork)
+library(crayon)
+#library(slingshot)
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+
+BiocManager::install("DelayedMatrixStats")
+
+library(DelayedMatrixStats)
+library(randomForest)
+install.packages("xgboost")
+library(xgboost)
+library(devtools)
+
+
+# load scEvoView package
+
+load_all("X:\\Robert_temp\\scEvoView\\work_on_figures\\scevoview_object\\scEvoView")
+load_all("X:\\Robert_temp\\data_combined\\code\\pipelines\\extract_features_for_framework_new\\r_package")
+
+
+```
+
+
+```{r load in data}
+
+
+#input_dir <- file.path(saving_folder, "Extraction_2025-03-18_15-14-28")
+input_dir <- "C:/Ole/20260721_CellClassification_v2/20260730_TestBleb_v4/07_evo_pipeline_gcut_inspired/05_r_pipeline/saved_extraction/Extraction_2026-08-12_13-03-37.29163"
+
+data <- loadExtractionData(directory = input_dir)
+
+
+```
+
+```{r set up evo object}
+
+evo <- setupEvoObject("20250205_Crest20XSD_mono_CellState-MW")
+
+evo <- loadMetadata(evo, data@meta_data_dir)
+
+evo <- loadMorphData(evo, data@features_dir)
+
+#removes the following feature custom.higherorder_length_min because is cor = 1 redundant to custom primary length min
+evo@morph_full$custom.higherorder_length_min <- NULL
+
+
+evo <- loadTracesAndShapes(evo, tm_data_path = data@tm_coordinates_dir, soma_data_path = data@soma_coordinates_dir)
+
+
+```
+
+```{r get unembedded PCA}
+evo@embedding_list$PCA <- NULL
+
+
+#kicking features over 0.8 correlation
+evo <- extractScaledMatrix(evo)
+
+evo <- performPca(evo)
+
+embeds <- data.frame(evo@embedding_list[["PCA"]]$x)
+
+colnames(embeds) <- paste0(colnames(embeds), "_unmapped")
+
+embeds$id <- rownames(embeds)
+
+evo@meta.data <- merge_meta_sort(evo@meta.data, embeds, by = "id")
+
+```
+
+
+
+```{r get embeddings for new evo object}
+
+evo@embedding_list$PCA <- NULL
+
+evo <- mapCellsOntoPCSpace(base_evo, evo)
+
+pc_data <- data.frame(id = rownames(evo@embedding_list$PCA), evo@embedding_list$PCA)
+
+evo@meta.data <- merge_meta_sort(evo@meta.data, pc_data, by = "id")
+
+
+```
+
+```{r classify cell state and biological scores}
+
+library(xgboost)
+
+xgb_cellstate <- xgb.load("X:/Robert_temp/data_combined/code/pipelines/extract_features_for_framework_new/ml_models/cellstate_250227.model")
+xgb_sr101 <- xgb.load("X:/Robert_temp/data_combined/code/pipelines/extract_features_for_framework_new/ml_models/sr101_250227.model")
+xgb_invasion <- xgb.load("X:/Robert_temp/data_combined/code/pipelines/extract_features_for_framework_new/ml_models/invasion_250227.model")
+xgb_fate <- xgb.load("X:/Robert_temp/data_combined/code/pipelines/extract_features_for_framework_new/ml_models/fate_250227.model")
+xgb_age <- xgb.load("X:/Robert_temp/data_combined/code/pipelines/extract_features_for_framework_new/ml_models/age_250227.model")
+
+
+evo <- calculateCellStates(evo)
+
+#evo@meta.data$clusters_XGB
+#evo@meta.data$sr101_probability_XGB
+#evo@meta.data$invasion_probability_XGB
+#evo@meta.data$fate_probability_XGB
+#evo@meta.data$age_probability_XGB
+evo@morph_mtx 
+morph_data <- evo@morph_mtx
+morph_data$id <- rownames(morph_data)
+evo@meta.data <- merge_meta_sort(evo@meta.data, morph_data, by = "id")   
+
+
+
+```
+
+
+
+```{r saving the object}
+
+
+saving_dir <- input_dir
+
+saveRDS(evo, file.path(saving_folder, "evoObject.rds"))
+
+#baseline <- evo
+```
+
+
+
+```{r plotting examples}
+
+library(ggplot)
+#evo@meta.data$PC1
+#evo@meta.data$PC2
+#evo@meta.data$clusters_XGB
+#evo@meta.data$sr101_probability_XGB
+#evo@meta.data$invasion_probability_XGB
+#evo@meta.data$fate_probability_XGB
+#evo@meta.data$age_probability_XGB
+
+ggplot() + 
+  geom_point(data = base_evo@meta.data, aes(PC1, PC2, color = clusters_new), alpha = 0.4) + 
+  geom_point(data = evo@meta.data, aes(PC1, PC2), color = "red", size = 2) +
+  coord_fixed() + 
+  ggtitle("TCF12 Cells on PCA")
+
+
+
+
+
+
+table(evo@meta.data$condition, useNA = "ifany")
+
+ggplot() +
+  geom_point(
+    data = base_evo@meta.data,
+    aes(PC1, PC2),
+    color = "grey75",
+    alpha = 0.25,
+    size = 1
+  ) +
+  geom_point(
+    data = evo@meta.data,
+    aes(PC1, PC2, color = condition),
+    alpha = 0.75,
+    size = 2
+  ) +
+  scale_color_manual(
+    values = c(
+      "Blebbistatin" = "#D55E00",
+      "DMSO" = "#0072B2"
+    ),
+    name = "Condition"
+  ) +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle("Blebbistatin vs. DMSO on PCA")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+evo@meta.data$MORF <- as.factor(str_before_first(evo@meta.data$id, "_"))
+unique(evo@meta.data$MORF)
+ggplot() + 
+  geom_point(data = base_evo@meta.data, aes(PC1, PC2), color = "grey", alpha = 0.4) + 
+  geom_point(data = evo@meta.data %>% filter(batch == "DIV07"), aes(PC1, PC2), size = 2) + 
+  coord_fixed() + 
+  ggtitle("DIV07")
+
+ggplot() + 
+  geom_point(data = base_evo@meta.data, aes(PC1, PC2), color = "grey", alpha = 0.4) + 
+  geom_point(data = evo@meta.data %>% filter(batch == "DIV14"), aes(PC1, PC2), size = 2) + 
+  coord_fixed() + 
+  ggtitle("DIV14")
+
+
+nrow(evo@meta.data %>% filter(batch == "DIV08"))
+
+
+library(ggplot2)
+library(dplyr)
+library(ggsignif)
+
+
+table(evo@meta.data$batch)
+
+evo@meta.data$batch <-factor(evo@meta.data$batch, levels = c("DIV08", "DIV14"))
+evo@meta.data$MORF <- factor(evo@meta.data$MORF, levels = c("CTRL", "ASCL1", "SOX8", "NFE2L2", "TCF12"))
+# Erstelle den Plot mit Violin- und Boxplot + Signifikanzbalken
+ggplot(evo@meta.data, aes(x = MORF, y = PC2, color = MORF)) +
+  geom_violin() +
+  geom_boxplot(width = 0.1) +
+  stat_compare_means(comparisons = list(c("CTRL", "ASCL1"), c("CTRL", "SOX8"), c("CTRL","NFE2L2"), c("CTRL","TCF12")),
+              test = "wilcox.test",  # Oder "t.test" falls parametrischer Test gewünscht
+              map_signif_level = TRUE)    # Automatische Sternanzeig
+  #ylim(c(-2, 15))
+  #r_size_theme+
+  #r_line_theme
+outliers2 <- evo@meta.data %>% filter(PC1 < -10)
+outliers2$id
+```
+
+
+
+
+```{r merge evo objects}
+
+library(dplyr)
+
+evo_object_list <- c(evo1, evo2, evo3...)
+
+
+merged_evo <- mergeEvoObjects(evo_object_list, name = "evo_name")
+
+
+```
+
+
+
+
+
+
+
+

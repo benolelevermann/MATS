@@ -1,0 +1,123 @@
+---
+title: "Run FeatureExtraction"
+author: "Robert Denninger"
+date: '2024-05-14'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r load dependencies}
+devtools::install_github("natverse/nat@v1.10.4")
+install.packages("spatstat")
+install.packages("RImageJROI")
+install.packages("matlib")
+install.packages("StereoMorph")
+install.packages("misc3d")
+install.packages("oce")
+install.packages("sf")
+install.packages("ks")
+install.packages("smoothr")
+install.packages("concaveman")
+
+
+library(cli)
+library(nat)
+library(ggplot2)
+library(spatstat)
+library(RImageJROI)
+library(dplyr)
+library(matlib)
+library(StereoMorph)
+library(misc3d)
+library(oce)
+library(sf)
+library(sp)
+library(ks)
+library(reticulate)
+library(stringr)
+library(strex)
+library(smoothr)
+library(concaveman)
+library(crayon)
+library(sp)
+library(sf)
+
+meta_data <- read.csv("C:/Ole/20260721_CellClassification_v2/r_pipeline/20260724_r_pipeline_output/meta_data.csv")
+
+#install.packages(smoothr)
+#install.packages(concaveman)
+```
+
+
+```{r install package}
+
+library(devtools)
+
+# load r package
+load_all("X:\\Robert_temp\\data_combined\\code\\pipelines\\extract_features_for_framework_new\\r_package2")
+
+```
+
+
+```{r initiate FeatureExtraction object}
+
+#set to folder with scripts (keep it)
+code_dir <- "X:\\Robert_temp\\data_combined\\code\\pipelines\\extract_features_for_framework_new"
+
+featEx <- newFeatureExtraction(name = "FeatureExtraction", code_dir)
+
+
+```
+
+
+
+```{r add missing file paths}
+
+#add directory to save extraction
+#featEx <- addSaveDir(featEx, "Y:/Projects/scEvoView/Stainings/Retrograde_RxAMPAR_Stainings/Crops/Retrograde_RxAMPAR_Stainings_Encrypted/extraction")
+saving_folder <- "C:/Ole/20260721_CellClassification_v2/r_pipeline/20260724_r_pipeline_output"
+featEx <- addSaveDir(featEx, saving_folder)
+
+
+```
+
+
+```{r add single cell information}
+
+featEx <- addMetaData(featEx, meta_data)
+
+
+
+```
+
+
+
+```{r check path for integrity}
+
+checkFilePaths(featEx)
+
+checkMetaData(featEx)
+
+unique(featEx@meta_data$id)
+
+```
+
+
+```{r run extraction}
+
+options(warn = -1)
+
+featEx <- runFeatureExtraction_NEW(featEx)
+
+ #saveRDS(featEx, file.path("Y:/Robert_temp/dump", "featEx.rds"))
+
+```
+
+
+
+

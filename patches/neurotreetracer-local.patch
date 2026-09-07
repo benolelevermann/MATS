@@ -1,0 +1,131 @@
+diff --git a/createRectangles.m b/createRectangles.m
+index ccfb9a3..5743ff9 100644
+--- a/createRectangles.m
++++ b/createRectangles.m
+@@ -25,50 +25,50 @@ for s=1: lenIncrStep
+         for i=91:179
+             
+             dd=[tand(i) 1]; dr = sqrt(dot(dd', dd));
+-            rectangle=getRectangle_alt(sz/2,dd,dr,length,thk,sz);
++            rectangle=getRectangle_alt(ceil(sz/2),dd,dr,length,thk,sz);
+             %figure; imshow(rectangle,[]);
+             sec{t}=rectangle;
+             t=t+1;
+             
+         end
+-        rectangle=getRectangle_alt(sz/2, [0 length], length,length, thk, sz);
++        rectangle=getRectangle_alt(ceil(sz/2), [0 length], length,length, thk, sz);
+         sec{t}=rectangle;
+         t=t+1;
+         for i=1:89
+             
+             dd=[tand(i) 1]; dr = sqrt(dot(dd', dd));
+-            rectangle=getRectangle_alt(sz/2,dd,dr,length,thk,sz);
++            rectangle=getRectangle_alt(ceil(sz/2),dd,dr,length,thk,sz);
+             %figure; imshow(rectangle,[]);
+             sec{t}=rectangle;
+             t=t+1;
+             
+         end
+         
+-        rectangle=getRectangle_alt(sz/2, [length 0], length,length, thk, sz);
++        rectangle=getRectangle_alt(ceil(sz/2), [length 0], length,length, thk, sz);
+         sec{t}=rectangle;
+         t=t+1;
+         for i=91:179
+             
+             dd=[-tand(i) -1]; dr = sqrt(dot(dd', dd));
+-            rectangle=getRectangle_alt(sz/2,dd,dr,length,thk,sz);
++            rectangle=getRectangle_alt(ceil(sz/2),dd,dr,length,thk,sz);
+             %figure; imshow(rectangle,[]);
+             sec{t}=rectangle;
+             t=t+1;
+             
+         end
+-        rectangle=getRectangle_alt(sz/2, [0 -length], length,length, thk, sz);
++        rectangle=getRectangle_alt(ceil(sz/2), [0 -length], length,length, thk, sz);
+         sec{t}=rectangle;
+         t=t+1;
+         for i=1:89
+             
+             dd=[-tand(i) -1]; dr = sqrt(dot(dd', dd));
+-            rectangle=getRectangle_alt(sz/2,dd,dr,length,thk,sz);
++            rectangle=getRectangle_alt(ceil(sz/2),dd,dr,length,thk,sz);
+             %figure; imshow(rectangle,[]);
+             sec{t}=rectangle;
+             t=t+1;
+             
+         end
+-        rectangle=getRectangle_alt(sz/2, [length 0], length,length, thk, sz);
++        rectangle=getRectangle_alt(ceil(sz/2), [length 0], length,length, thk, sz);
+         sec{t}=rectangle;
+         cell_idx{idx+1}=sec;
+     end
+diff --git a/findNeuriteComponents.m b/findNeuriteComponents.m
+index 0532e01..deca2de 100644
+--- a/findNeuriteComponents.m
++++ b/findNeuriteComponents.m
+@@ -3,8 +3,8 @@ function selectedcomponents = findNeuriteComponents(S,xNeurites, xSeg, xSoma, di
+ %is dilated in order to generate two rings around it. Then centroids are
+ %connected to find direction of neurite and starting point of trace.
+ 
+-se=strel('disk',6);
+-see=strel('disk',4);
++se=strel('disk',6,0);
++see=strel('disk',4,0);
+ dilatedSoma= imdilate(imdilate(imdilate(imdilate(dilatedSoma,see),see),see),see); %added new
+ dilatedSoma1=dilatedSoma;
+ for i=1:2
+@@ -27,7 +27,7 @@ neuMarks=dilSomaB.*double(xSeg); %nnm=neuMarks; nnm(S)=2;
+ neuMarks1=dilSomaB1.*double(xSeg); 
+ outerMarksCentroid =regionprops(neuMarks1,'centroid');
+ 
+-[B,~] = bwboundaries(neuMarks,'noholes');
++[B,~] = bwboundaries(neuMarks,8,'noholes');
+ cellLengths=cellfun('length',B); cellLengths=find(cellLengths>3);
+ BB=cell(length(cellLengths),1);
+ for i=1:length(cellLengths) BB{i,1}=B{cellLengths(i),1}; end
+diff --git a/generateCenterLine.m b/generateCenterLine.m
+index aa4cb33..e7385ab 100644
+--- a/generateCenterLine.m
++++ b/generateCenterLine.m
+@@ -13,14 +13,16 @@ self.zSmear=1;
+ self.cutOff=sqrt(2)-1/2; 
+ self.inputSeg=inputSeg;
+ self.inputSoma=inputSoma;
+-se=strel('disk',2);
++se=strel('disk',2,0);
+ Somas=connComp(inputSoma);
+ comp_Num=Somas.compNum;
+ path_neu=cell(comp_Num); 
+ [S,S_i,D]=genseed(self,lb); %generate seeds
++printf('  seeding done, %d seeds; tracing %d somas\n', numel(S), comp_Num); fflush(stdout);
+ 
+ for i=1:comp_Num
+-%tic;
++somaTic=tic;  % progress output: the original prints nothing inside this loop
++
+     diffSomas=setdiff(1:comp_Num,i);
+     base=zeros(size(inputSeg));
+     for j=1:size(diffSomas,2)
+@@ -32,6 +34,7 @@ for i=1:comp_Num
+     [neuGraph_path] = traceNeurites(self,D,S,S_i,se,cell_inc,lenghtToSearch,NumofBands,NumofIncrement,option); 
+ %toc;
+ path_neu{i}=neuGraph_path; 
++printf('  soma %d/%d done in %.1f s\n', i, comp_Num, toc(somaTic)); fflush(stdout);
+ end
+ end
+ 
+diff --git a/genseed.m b/genseed.m
+index a409849..cedbcb9 100644
+--- a/genseed.m
++++ b/genseed.m
+@@ -81,7 +81,7 @@ S2=eliminate_extra_seeding(S,D,sz);
+ S=unique(S2);
+ S=[S; somaSeeds];
+ base=self.inputSeg;
+-base(S)=5; figure; imshow(base,[],'InitialMagnification',9000)
++base(S)=5; %figure; imshow(base,[],'InitialMagnification',9000)  % disabled: unconditional display, not behind option.manual
+ S_i=[];
+ for i=1:length(S)
+     [a,b]=ind2sub(sz,S(i));
