@@ -64,6 +64,9 @@ New Text Document.txt
 /web_pipeline_runs*/
 /review_dataset/
 /evo_pipeline_input_net141/
+/blind_selection_runs/
+/blind_selection_learning_dataset/
+/evo_manual_selection_output/
 /instance_annotation_dataset142/
 /instance_separator_results/
 /cells_for_r_pipeline/

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#eef1ec">
+  <title>Blind Cell Selector · Netz 141</title>
+  <link rel="stylesheet" href="/styles.css?v=20260908a">
+</head>
+<body>
+  <header class="topbar">
+    <a href="/" class="brand"><span class="brand-icon">⌁</span> Blind Cell Selector</a>
+    <div class="system"><i></i> lokal · Netz <b id="network-label">141</b></div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="eyebrow">UNBIASED CELL SELECTION / EVO EXPORT</div>
+      <h1>Erst auswählen.<br><em>Dann segmentieren.</em></h1>
+      <p>Du siehst zunächst ausschließlich das Rohbild. Deine Auswahl wird unveränderlich gespeichert und erst danach von Netz 141, Hysterese 0,20 und Zelltrenner Checkpoint 80 verarbeitet.</p>
+      <div class="steps">
+        <span><b>01</b> Rohbild</span><i></i><span><b>02</b> Zellen anklicken</span><i></i>
+        <span><b>03</b> Segmentieren</span><i></i><span><b>04</b> Prüfen</span><i></i><span><b>05</b> Evo</span>
+      </div>
+    </section>
+
+    <section class="upload card" id="upload-section">
+      <div><div class="kicker">NEUES ÜBERSICHTSBILD</div><h2>TIFF hochladen</h2><p>Das Netz startet noch nicht. Nach dem Upload wählst du die gewünschten Zellen im unveränderten Rohbild.</p></div>
+      <label class="dropzone" id="dropzone">
+        <input id="file-input" type="file" accept=".tif,.tiff,image/tiff">
+        <span>↥</span><strong id="file-label">TIFF hier ablegen oder auswählen</strong>
+      </label>
+      <button class="primary" id="upload-button" disabled>Rohbild öffnen <span>→</span></button>
+    </section>
+
+    <section class="selection card" id="selection-section" hidden>
+      <div class="section-head">
+        <div><div class="kicker">BLINDE AUSWAHL</div><h2>Zellkörper anklicken</h2><p>Ein Klick setzt eine Auswahl, ein erneuter Klick nahe am Marker entfernt sie. Zu diesem Zeitpunkt wurde noch kein Modell ausgeführt.</p></div>
+        <div class="selection-count"><strong id="selection-count">0</strong><span>Zellen</span></div>
+      </div>
+      <div class="selection-tools">
+        <button id="undo-button">↶ Letzten entfernen</button>
+        <button id="clear-button">Alle entfernen</button>
+        <label>Zoom <input id="zoom-slider" type="range" min="100" max="300" value="100" step="10"><output id="zoom-output">100%</output></label>
+      </div>
+      <div class="image-viewport" id="image-viewport">
+        <div class="image-stage" id="image-stage">
+          <img id="raw-image" alt="Hochgeladenes Rohbild">
+          <svg id="marker-layer" aria-label="Ausgewählte Zellen"></svg>
+        </div>
+      </div>
+      <div class="lock-bar">
+        <p><strong id="selection-status">Noch keine Zelle ausgewählt.</strong><small>Nach dem Abschließen ist diese Auswahl absichtlich nicht mehr veränderbar.</small></p>
+        <button class="primary mint" id="lock-button" disabled>Auswahl abschließen & verarbeiten <span>→</span></button>
+      </div>
+    </section>
+
+    <section class="progress card" id="progress-section" hidden>
+      <div class="section-head"><div><div class="kicker">LIVE STATUS</div><h2 id="progress-title">Verarbeitung läuft</h2></div><span class="pill" id="status-pill">Wartet</span></div>
+      <div class="progress-track"><i id="progress-bar"></i></div>
+      <div class="progress-copy"><strong id="progress-percent">0%</strong><span id="progress-message"></span></div>
+      <div class="phase-grid">
+        <div data-phase="prediction"><b>01</b><span>Netz 141</span></div>
+        <div data-phase="hysteresis"><b>02</b><span>Hysterese</span></div>
+        <div data-phase="selection_matching"><b>03</b><span>Zuordnung</span></div>
+        <div data-phase="instance_separation"><b>04</b><span>Trennung</span></div>
+        <div data-phase="evo_finalization"><b>05</b><span>Evo</span></div>
+      </div>
+      <details><summary>Live-Protokoll</summary><ol id="event-log"></ol></details>
+    </section>
+
+    <section class="review card" id="review-section" hidden>
+      <div class="section-head">
+        <div><div class="kicker">FINALE PRÜFUNG</div><h2>Nur das Endergebnis entscheiden</h2><p>→ übernimmt die Zelle für Evo, ← verwirft sie. Danach erscheint sofort die nächste offene Zelle.</p></div>
+        <div class="review-count"><strong id="review-progress">0 / 0</strong><span id="review-approved">0 freigegeben</span></div>
+      </div>
+      <div class="warning" id="matching-warning" hidden></div>
+      <article class="cell-review" id="cell-review" tabindex="0">
+        <header><strong id="cell-title">Zelle</strong><span id="cell-meta"></span></header>
+        <div class="comparison">
+          <figure><img id="crop-raw"><figcaption>Rohbild</figcaption></figure>
+          <figure><img id="crop-prediction"><figcaption>Netz 141</figcaption></figure>
+          <figure><img id="crop-hysteresis"><figcaption>Hysterese 0,20</figcaption></figure>
+          <figure><img id="crop-final"><figcaption>Getrennte Einzelzelle</figcaption></figure>
+        </div>
+        <div class="decision-row">
+          <button class="reject" id="reject-button"><kbd>←</kbd> Nicht verwenden</button>
+          <span id="decision-hint">Eine Entscheidung pro Zelle</span>
+          <button class="accept" id="accept-button">Für Evo übernehmen <kbd>→</kbd></button>
+        </div>
+      </article>
+      <div class="review-finished" id="review-finished" hidden>
+        <h3>Alle Kandidaten sind geprüft.</h3>
+        <p id="finished-copy"></p>
+        <a class="primary" href="/api/output/download">Freigegebene Evo-Zellen laden <span>↓</span></a>
+      </div>
+    </section>
+
+    <section class="history card">
+      <div class="section-head compact"><div><div class="kicker">VERLAUF</div><h2>Letzte Bilder</h2></div><button id="refresh-button">Aktualisieren</button></div>
+      <div id="history-list" class="history-list"><p>Noch keine Läufe.</p></div>
+    </section>
+  </main>
+
+  <footer><span id="output-path">Freigegebene Zellordner werden lokal gespeichert.</span><span>Die Bilder verlassen diesen Rechner nicht.</span></footer>
+  <div class="toast" id="toast" hidden></div>
+  <script src="/app.js?v=20260908a" defer></script>
+</body>
+</html>
