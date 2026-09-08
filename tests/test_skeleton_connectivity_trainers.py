@@ -18,6 +18,8 @@ from custom_trainers.skeleton_recall.nnUNetTrainerSkeletonRecallCells import (
     nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAugDebug50,
     nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAugFluxAux,
     nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAugFluxAuxDebug50,
+    nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAugSyntheticMultiCellFineTune20,
+    nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAugSyntheticMultiCellFineTune200,
 )
 
 
@@ -150,6 +152,25 @@ class ConnectivityTrainerTests(unittest.TestCase):
                     list(inspect.signature(debug.__init__).parameters),
                     ["self", "plans", "configuration", "fold", "dataset_json", "device"],
                 )
+
+    def test_synthetic_multicell_finetune_settings(self) -> None:
+        parent = (
+            nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAugSyntheticMultiCellFineTune200
+        )
+        debug = (
+            nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAugSyntheticMultiCellFineTune20
+        )
+        with patch.object(
+            nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAug,
+            "__init__",
+            lambda instance, *args, **kwargs: None,
+        ):
+            full_trainer = parent({}, "2d", 0, {}, None)
+            debug_trainer = debug({}, "2d", 0, {}, None)
+        self.assertEqual(full_trainer.initial_lr, 1e-3)
+        self.assertEqual(full_trainer.num_epochs, 200)
+        self.assertEqual(debug_trainer.initial_lr, 1e-3)
+        self.assertEqual(debug_trainer.num_epochs, 20)
 
 
 if __name__ == "__main__":

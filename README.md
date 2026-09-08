@@ -33,6 +33,9 @@ nnUNet_results/Dataset141_dataset139_plus_net139_reviewed_cells/
 # Instanz-IDs in den MATS-Übersichtsbildern annotieren
 .\run_instance_annotation_tool.ps1
 
+# Mehrzellbilder aus Dataset141 synthetisieren und für Fine-Tuning vorbereiten
+.\run_build_dataset143_synthetic_multicell.ps1 -Preprocess
+
 # Tests ohne zusätzliche Test-Abhängigkeit
 .\.venv\Scripts\python.exe -m unittest discover -s tests
 ```
@@ -41,6 +44,7 @@ Weitere Details stehen in:
 
 - `CELL_PIPELINE_WEB_README.md`
 - `INSTANCE_ANNOTATION_TOOL_README.md`
+- `DATASET143_SYNTHETIC_MULTICELL_README.md`
 - `SKELETON_RECALL_TO_EVO_WORKFLOW.md`
 - `custom_trainers/skeleton_recall/README.md`
 

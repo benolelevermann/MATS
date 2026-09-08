@@ -44,3 +44,11 @@ and all intensity augmentations. The `...Debug50` class is its smoke test.
 training-only two-channel context-flux head (radius 7, weight 0.1). In eval mode
 the wrapper returns the ordinary semantic outputs, so nnU-Net validation and
 prediction remain compatible. Its `...Debug50` class is the smoke test.
+
+## Dataset143 synthetic multi-cell fine-tuning
+
+`nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAugSyntheticMultiCellFineTune200`
+loads the complete final Dataset141 network from
+`NNUNET_SYNTHETIC_MULTICELL_FINETUNE_CHECKPOINT`, keeps the Dataset141 loss and
+label-safe augmentation, and fine-tunes for 200 epochs at learning rate 0.001.
+The corresponding `...FineTune20` class is an isolated technical check.

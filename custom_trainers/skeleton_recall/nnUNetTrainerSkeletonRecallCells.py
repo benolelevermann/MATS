@@ -1021,6 +1021,80 @@ class nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAugMATSFineTune5(
         self.num_epochs = 5
 
 
+class nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAugSyntheticMultiCellFineTune200(
+    nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAugMATSFineTune100
+):
+    """Fine-tune the complete Dataset141 model on Dataset143."""
+
+    def __init__(
+        self,
+        plans: dict,
+        configuration: str,
+        fold: int,
+        dataset_json: dict,
+        device: torch.device = torch.device("cuda"),
+    ):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        self.initial_lr = 1e-3
+        self.num_epochs = 200
+
+    def initialize(self):
+        if self.was_initialized:
+            return
+        # Deliberately bypass the MATS checkpoint loader inherited only for its
+        # robust progress plotting. Dataset143 must start from Dataset141.
+        nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAug.initialize(self)
+        checkpoint_path = os.environ.get(
+            "NNUNET_SYNTHETIC_MULTICELL_FINETUNE_CHECKPOINT", ""
+        )
+        if not checkpoint_path:
+            return
+
+        checkpoint = torch.load(
+            checkpoint_path,
+            map_location=self.device,
+            weights_only=False,
+        )
+        source_weights = checkpoint["network_weights"]
+        target_network = self.network
+        if hasattr(target_network, "module"):
+            target_network = target_network.module
+        if hasattr(target_network, "_orig_mod"):
+            target_network = target_network._orig_mod
+        target_keys = set(target_network.state_dict())
+        transferred = {}
+        for key, value in source_weights.items():
+            normalized_key = (
+                key[7:]
+                if key.startswith("module.") and key[7:] in target_keys
+                else key
+            )
+            transferred[normalized_key] = value
+        target_network.load_state_dict(transferred, strict=True)
+        self.print_to_log_file(
+            "Loaded the complete Dataset141 network for synthetic multi-cell "
+            "fine-tuning, including all segmentation heads:",
+            checkpoint_path,
+        )
+
+
+class nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAugSyntheticMultiCellFineTune20(
+    nnUNetTrainerSkeletonRecallCellsSkeleton2xSoma1xLabelSafeAugSyntheticMultiCellFineTune200
+):
+    """Twenty-epoch Dataset143 technical check in a separate result folder."""
+
+    def __init__(
+        self,
+        plans: dict,
+        configuration: str,
+        fold: int,
+        dataset_json: dict,
+        device: torch.device = torch.device("cuda"),
+    ):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        self.num_epochs = 20
+
+
 class DeepFluxAuxTrainingMixin:
     """Training-only DeepFlux-style auxiliary regression for class 1."""
 
