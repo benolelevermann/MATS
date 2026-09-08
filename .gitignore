@@ -65,6 +65,7 @@ New Text Document.txt
 /review_dataset/
 /evo_pipeline_input_net141/
 /instance_annotation_dataset142/
+/instance_separator_results/
 /cells_for_r_pipeline/
 /dataset137_div10_build_*/
 /dataset138_clean_single_cell_candidates/
