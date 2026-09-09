@@ -1,5 +1,7 @@
 # Soma-seeded cell separation
 
+[Zur Dokumentationsübersicht](../README.md)
+
 This experiment changes only cell separation. Network 141 stays frozen and
 continues to generate the semantic classes background, skeleton and soma.
 

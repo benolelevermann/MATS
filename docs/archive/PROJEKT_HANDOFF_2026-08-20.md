@@ -1,5 +1,7 @@
 # Projekt-Handoff: Glioblastom-Zellsegmentierung (Stand 2026-08-20)
 
+[Zur Dokumentationsübersicht](../README.md)
+
 Dieses Dokument fasst den Projektstand zusammen, damit ein LLM in einem neuen Chat
 ohne Vorwissen weiterarbeiten kann.
 

@@ -64,6 +64,7 @@ New Text Document.txt
 /web_pipeline_runs*/
 /review_dataset/
 /evo_pipeline_input_net141/
+/evo_selected_cells_DMSO/
 /blind_selection_runs/
 /blind_selection_learning_dataset/
 /evo_manual_selection_output/

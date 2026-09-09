@@ -1,5 +1,7 @@
 # Schrittweise Tests für durchgängige 1-px-Skeletons
 
+[Zur Dokumentationsübersicht](../README.md)
+
 Diese Versuchsleiter lässt die aktuelle R0-Baseline unverändert. Jeder Kandidat
 schreibt in einen eigenen Ordner unter `skeleton_connectivity_runs` oder in einen
 eigenen nnU-Net-Trainerordner. R1 Full Resolution Only wird nicht verwendet.

@@ -1,5 +1,7 @@
 # Fünf Paper für die Verbesserung der Glioblastom-Segmentierungspipeline
 
+[Zur Dokumentationsübersicht](../README.md)
+
 > **Korrekturen nach unabhängiger Nachprüfung (2026-08-21):**
 > 1. Der Bericht nannte an mehreren Stellen `geometry_rescue_gap = 110`. Der tatsächliche Wert
 >    ist **60** — sowohl als Default in `run_skeleton_recall_to_evo_workflow.ps1:39` als auch
@@ -117,7 +119,7 @@ Zwei weitere Befunde aus derselben Messung sind wichtiger als der Faktor 38:
 
 2. **Konnektivität festschreiben, nicht umbauen.** Die bestehende Kette benutzt bereits durchgängig 8-Konnektivität für den Vordergrund — geprüft in `postprocess_net129_no_loss.py` (483, 492, 1214, 1469), `compare_cell_assignment_methods.py` (587, 590, 728, 731) und `prepare_somas_for_assignment.py` über `CONNECTIVITY_8`. Die einzige hintergrundbezogene Operation, `ndi.binary_fill_holes` in `prepare_somas_for_assignment.py` Zeile 191, hat als Default bereits `generate_binary_structure(2,1)`, ist also 4-konnektiv und Jordan-konsistent. Es gibt nichts zu reparieren. Lege trotzdem `topology_conventions.py` mit `CONNECTIVITY_FG = np.ones((3,3))` und `CONNECTIVITY_BG = ndi.generate_binary_structure(2,1)` an und stelle die Aufrufe darauf um — reine Absicherung gegen künftiges Auseinanderlaufen. Verhalten ändert sich dabei nicht.
 
-3. **Einen Absatz dokumentieren, keinen wiederkehrenden QC-Report.** In `DATASET137_DIV10_BUILD_README.md` und `PROJEKT_HANDOFF_2026-08-20.md`: das GT-Skelett ist wegen des Bresenham-Rasterizers strikt 8-zusammenhängend, unter 4-Konnektivität zerfällt es um Faktor 38, deshalb ist 8-Konnektivität für den Vordergrund zwingend und wird an jede Metrik als β0^A notiert. Der Wert ist eine Konstante des Rasterizers, kein Messwert, der sich ändert — ein wiederkehrender Suszeptibilitäts-Report würde eine Konstante messen.
+3. **Einen Absatz dokumentieren, keinen wiederkehrenden QC-Report.** In [`DATASET137_DIV10_BUILD_README.md`](../workflows/DATASET137_DIV10_BUILD_README.md) und [`PROJEKT_HANDOFF_2026-08-20.md`](../archive/PROJEKT_HANDOFF_2026-08-20.md): das GT-Skelett ist wegen des Bresenham-Rasterizers strikt 8-zusammenhängend, unter 4-Konnektivität zerfällt es um Faktor 38, deshalb ist 8-Konnektivität für den Vordergrund zwingend und wird an jede Metrik als β0^A notiert. Der Wert ist eine Konstante des Rasterizers, kein Messwert, der sich ändert — ein wiederkehrender Suszeptibilitäts-Report würde eine Konstante messen.
 
 4. **Berichtsnotation umstellen.** In allen HTML-Ausgaben (`make_skeleton_recall_comparison_html.py`, `make_strict_soma_qc_html.py`) und im Handoff: "β0^A (FG 8-konnektiv, BG 4-konnektiv)" statt "Komponentenzahl". Ohne diese Angabe kann sich jede berichtete Komponentenzahl um Faktor 38 unterscheiden.
 

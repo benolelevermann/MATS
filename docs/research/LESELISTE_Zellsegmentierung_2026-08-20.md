@@ -1,5 +1,7 @@
 # Priorisierte Leseliste — Glioblastom-Neuritensegmentierung mit nnU-Net v2
 
+[Zur Dokumentationsübersicht](../README.md)
+
 Alle Zitationen wurden gegen den jeweiligen Prüfbericht abgeglichen und, wo eine Korrektur vorlag, in der korrigierten Fassung übernommen. Kein Eintrag war mit `exists=false` markiert; entfernt wurden ausschließlich Dubletten über Themenfelder hinweg (NeuronCyto II, SNT, Carneiro-Esteves Neurocomputing, Quality Control of Neuron Reconstruction, clDice). Jedes dieser Papers steht nun einmal an der Stelle, wo es den größten Hebel hat, mit Querverweis von der zweiten Stelle.
 
 ---

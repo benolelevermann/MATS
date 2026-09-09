@@ -1,5 +1,7 @@
 # Paper-guided, no-loss test workflow
 
+[Zur Dokumentationsübersicht](../README.md)
+
 This is a separate test pipeline for predictions from the Dataset136
 `nnUNetTrainerSkeletonRecallCells` model. It does **not** overwrite the prior
 workflow.

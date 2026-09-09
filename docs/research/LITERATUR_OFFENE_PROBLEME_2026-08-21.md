@@ -1,5 +1,7 @@
 # Arbeiten, die ausprobiert werden sollten
 
+[Zur Dokumentationsübersicht](../README.md)
+
 Grundlage: 32 Einträge, davon 31 nach Dublettenbereinigung (Buglakova et al. 2025 war doppelt gelistet unter A und C; laut Prüfbericht ist die A-Zuordnung mechanistisch ausgeschlossen und der Eintrag steht deshalb nur unter C). Kein Eintrag war `exists=false`. Alle Zitationen sind die korrigierten Fassungen der Prüfberichte.
 
 ---

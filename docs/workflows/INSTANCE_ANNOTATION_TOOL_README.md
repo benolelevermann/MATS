@@ -1,5 +1,7 @@
 # Instance-Annotationswerkzeug für Dataset142
 
+[Zur Dokumentationsübersicht](../README.md)
+
 Das lokale Werkzeug ordnet die bereits manuell annotierten Skeleton- und
 Somapixel vollständigen Zellen zu. Eine Zell-ID ist nur innerhalb eines
 Übersichtsbildes gültig. Die semantischen Original-Labels werden nie verändert.

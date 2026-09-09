@@ -1,8 +1,12 @@
-# CellClassification v2
+# MATS
 
-Lokale Pipeline für die Segmentierung mikroskopischer Zellbilder, die
-Hysterese-Nachverarbeitung 1-px-breiter Skeletons und die konservative
-Extraktion einzelner Zellen.
+MATS ist die lokale Pipeline für die Segmentierung mikroskopischer Zellbilder,
+die Hysterese-Nachverarbeitung 1-px-breiter Skeletons und die konservative
+Extraktion einzelner Zellen. Dieses Repository versioniert den reproduzierbaren
+Projektteil: Quellcode, Startskripte, Tests, Konfiguration und Dokumentation.
+
+Rohbilder, Trainingsdaten, Modell-Checkpoints und erzeugte Resultate bleiben
+wegen ihrer Größe auf dem lokalen Laufwerk beziehungsweise dem Datenserver.
 
 ## Aktueller Standard
 
@@ -21,7 +25,18 @@ nnUNet_results/Dataset141_dataset139_plus_net139_reviewed_cells/
   fold_0/checkpoint_final.pth
 ```
 
-## Wichtigste Einstiegspunkte
+## Schnellstart
+
+Nach dem Klonen:
+
+```powershell
+git clone --recurse-submodules https://github.com/benolelevermann/MATS.git
+cd MATS
+```
+
+Die Python-Umgebung und die in `requirements-lock.txt` dokumentierten Pakete
+müssen lokal eingerichtet werden. Anschließend sind die wichtigsten
+Einstiegspunkte:
 
 ```powershell
 # Neue Trainingszellen erzeugen und manuell prüfen
@@ -42,11 +57,51 @@ nnUNet_results/Dataset141_dataset139_plus_net139_reviewed_cells/
 
 Weitere Details stehen in:
 
-- `CELL_PIPELINE_WEB_README.md`
-- `INSTANCE_ANNOTATION_TOOL_README.md`
-- `DATASET143_SYNTHETIC_MULTICELL_README.md`
-- `SKELETON_RECALL_TO_EVO_WORKFLOW.md`
-- `custom_trainers/skeleton_recall/README.md`
+- [Dokumentationsübersicht](docs/README.md)
+- [Projektstruktur](docs/PROJECT_STRUCTURE.md)
+- [Daten- und Modellspeicherung](docs/DATA_STORAGE.md)
+- [Web-Pipeline](docs/workflows/CELL_PIPELINE_WEB_README.md)
+- [Instanzannotationswerkzeug](docs/workflows/INSTANCE_ANNOTATION_TOOL_README.md)
+- [Dataset143](docs/workflows/DATASET143_SYNTHETIC_MULTICELL_README.md)
+- [Skeleton-Recall-Workflow](docs/workflows/SKELETON_RECALL_TO_EVO_WORKFLOW.md)
+- [Skeleton-Recall-Trainer](custom_trainers/skeleton_recall/README.md)
+
+## Projektstruktur
+
+```text
+MATS/
+├── blind_selection_web/       manuelle Zellvorauswahl
+├── cell_pipeline_web/         Inferenz-, Review- und Export-Webanwendung
+├── custom_trainers/           externe nnU-Net-Trainer
+├── docs/
+│   ├── workflows/             Bedienung und reproduzierbare Abläufe
+│   ├── research/              Literatur und Methodenentscheidungen
+│   └── archive/               historische Projektstände
+├── instance_annotation_web/   Werkzeug für Instanz-IDs
+├── r_pipeline/                scEvoView-/R-Auswertung und Fiji-Export
+├── tests/                     automatische Tests
+├── tools/                     externe Hilfswerkzeuge
+├── run_*.ps1                  direkt ausführbare Workflows
+└── *.py                       Pipeline- und Analyseskripte
+```
+
+Die ausführbaren `run_*.ps1`-Dateien bleiben bewusst im Projektstamm: Sie
+verwenden ihren eigenen Speicherort als stabile Projektwurzel. Die Präfixe
+`build_`, `prepare_`, `make_`, `compare_`, `evaluate_` und `run_` gliedern die
+operativen Skripte nach Aufgabe. Eine vollständige Zuordnung steht in der
+[Projektstruktur](docs/PROJECT_STRUCTURE.md).
+
+## Änderungen zu GitHub übertragen
+
+Für spätere Updates genügt:
+
+```powershell
+.\update_github.ps1 -Message "Kurze Beschreibung der Änderung"
+```
+
+Das Skript zeigt vor dem Commit alle vorgesehenen Dateien, blockiert neue
+Dateien über 50 MiB und fragt vor dem Commit noch einmal nach. Mit `-NoPush`
+wird nur lokal committed.
 
 ## Lokale Einrichtung
 
@@ -86,4 +141,5 @@ Die `.gitignore` schließt insbesondere folgende lokale Verzeichnisse aus:
 - alle datierten Experiment- und Vergleichsordner
 
 Diese Daten müssen getrennt gesichert werden. Git ersetzt kein Backup der
-Mikroskopiebilder oder trainierten Modelle.
+Mikroskopiebilder oder trainierten Modelle. Einzelheiten und die erwarteten
+lokalen Pfade stehen in [Daten- und Modellspeicherung](docs/DATA_STORAGE.md).

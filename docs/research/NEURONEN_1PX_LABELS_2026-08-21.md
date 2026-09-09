@@ -1,5 +1,7 @@
 # 1-px-Skelette als Trainingslabel: was das Neuronen-Feld wirklich tut
 
+[Zur Dokumentationsübersicht](../README.md)
+
 ## Direkte Antwort
 
 **Ja, solche Verfahren existieren — aber sie sind die Ausnahme, und im Neuronenfeld gibt es genau eine.** Von 26 geprüften Methodenarbeiten trainieren **drei** wirklich binär auf einem 1 Pixel breiten Label: **NeuroFly** (WACV 2025, Neuronen, Ganzhirn), **CP-loss** (IROS 2021, Bordsteine in Luftbildern) und **ThinCrack U-Net** (CACAIE 2023, Risse). Eine vierte (Xu et al. 2021, Risse) behält die 1-px-Annotation, verwandelt sie aber vor dem Training per Gauß-Filter in ein weiches Ziel.

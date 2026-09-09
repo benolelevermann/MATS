@@ -1,5 +1,7 @@
 # Single Cell Extractor - local web pipeline
 
+[Zur Dokumentationsübersicht](../README.md)
+
 The local website runs the deliberately small processing chain requested for new overview images:
 
 1. Optional visual preselection from the prepared MICA C3-C10 FOV library. Good example FOVs can
