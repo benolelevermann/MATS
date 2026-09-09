@@ -19,6 +19,7 @@ from cell_pipeline_web.pipeline import (
     _conservative_soma_instances,
     _export_cell,
     _finalize_for_evo,
+    canonical_hysteresis_arguments,
     _load_export_helpers,
     _notify,
     _prediction_environment,
@@ -510,6 +511,7 @@ def run_blind_selection_pipeline(
             str(semantic_settings.python), str(semantic_settings.hysteresis_script),
             "--probabilities", str(probability_path), "--output-dir", str(hysteresis_root),
             *hysteresis_cli_arguments(semantic_settings), "--write-semantic", "--overwrite",
+            *canonical_hysteresis_arguments(semantic_settings),
         ],
         callback, "hysteresis", 42, semantic_settings.project_root,
     )

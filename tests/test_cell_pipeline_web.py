@@ -18,6 +18,7 @@ from cell_pipeline_web.pipeline import (
     _separate_touching_soma_instances,
     _tracer_soma_instances,
     _validate_ntt_traces,
+    canonical_hysteresis_arguments,
     default_settings,
     extract_single_cells,
     hysteresis_cli_arguments,
@@ -41,6 +42,16 @@ class HysteresisProfileTests(unittest.TestCase):
         self.assertEqual(
             hysteresis_cli_arguments(fixed),
             ["--t-high", "0.647", "--t-low", "0.25"],
+        )
+        self.assertEqual(
+            canonical_hysteresis_arguments(fixed),
+            ["--canonical-1px", "--max-soma-gap-px", "3.0"],
+        )
+        self.assertEqual(
+            canonical_hysteresis_arguments(
+                default_settings(PROJECT_ROOT, canonicalize_skeleton=False)
+            ),
+            [],
         )
 
     def test_fixed_thresholds_are_not_recomputed_from_the_image(self) -> None:

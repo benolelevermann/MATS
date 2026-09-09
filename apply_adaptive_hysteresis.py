@@ -52,7 +52,9 @@ import numpy as np
 import tifffile
 from scipy import ndimage as ndi
 
-SCRIPT_VERSION = "adaptive-or-fixed-hysteresis-v2-2026-09-05"
+from canonical_skeleton import canonicalize_skeleton
+
+SCRIPT_VERSION = "adaptive-or-fixed-hysteresis-v3-canonical-1px-2026-09-09"
 CONNECTIVITY_8 = np.ones((3, 3), dtype=bool)
 SKELETON, SOMA = 1, 2
 
@@ -73,6 +75,23 @@ def parse_args() -> argparse.Namespace:
                              "(0 = keep everything, which is the default and what the analysis assumes).")
     parser.add_argument("--write-semantic", action="store_true",
                         help="Write the resulting 0/1/2 map per case (adds ~90 MB per 90 Mpx image).")
+    parser.add_argument(
+        "--canonical-1px",
+        action="store_true",
+        help=(
+            "Topology-preserving thinning after hysteresis. The thick hysteresis band "
+            "is retained as a diagnostic TIFF."
+        ),
+    )
+    parser.add_argument(
+        "--max-soma-gap-px",
+        type=float,
+        default=3.0,
+        help=(
+            "With --canonical-1px, explicitly bridge only skeleton-to-soma gaps up "
+            "to this Euclidean distance before final thinning (default: 3 px)."
+        ),
+    )
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
 
@@ -205,9 +224,26 @@ def main() -> None:
                 dropped = int(skeleton.sum() - pruned.sum())
                 skeleton = pruned
 
+        hysteresis_band = skeleton.copy()
+        band_metrics = measure(hysteresis_band, soma)
+        canonical_report = None
+        if args.canonical_1px:
+            if args.max_soma_gap_px < 0:
+                raise ValueError("--max-soma-gap-px must be >= 0.")
+            skeleton, canonical_report = canonicalize_skeleton(
+                hysteresis_band,
+                soma=soma,
+                max_soma_gap_px=args.max_soma_gap_px,
+            )
+
         adaptive = measure(skeleton, soma)
 
         if args.write_semantic:
+            if args.canonical_1px:
+                tifffile.imwrite(
+                    out / f"{case}_hysteresis_band.tif",
+                    hysteresis_band.astype(np.uint8),
+                )
             semantic = np.zeros(argmax.shape, dtype=np.uint8)
             semantic[skeleton] = SKELETON
             semantic[soma] = SOMA
@@ -220,6 +256,24 @@ def main() -> None:
             "T_high": round(high / 255.0, 4),
             "T_low": round(low / 255.0, 4),
             "pruned_px": dropped,
+            "canonical_1px": bool(args.canonical_1px),
+            "hysteresis_band_skeleton_px": band_metrics["skeleton_px"],
+            "hysteresis_band_components": band_metrics["components"],
+            "canonical_pixels_removed": (
+                canonical_report.pixels_removed_by_thinning
+                if canonical_report is not None
+                else 0
+            ),
+            "canonical_soma_gap_pixels_added": (
+                canonical_report.soma_gap_pixels_added
+                if canonical_report is not None
+                else 0
+            ),
+            "canonical_detached_components_after": (
+                canonical_report.detached_components_after
+                if canonical_report is not None
+                else ""
+            ),
             **{f"argmax_{k}": v for k, v in baseline.items()},
             **{f"adaptive_{k}": v for k, v in adaptive.items()},
         }
@@ -251,6 +305,8 @@ def main() -> None:
         "requested_t_high": args.t_high,
         "requested_t_low": args.t_low,
         "min_skeleton_px": args.min_skeleton_px,
+        "canonical_1px": bool(args.canonical_1px),
+        "max_soma_gap_px": args.max_soma_gap_px if args.canonical_1px else None,
         "cases": len(rows),
         "rows": rows,
     }, indent=2), encoding="utf-8")

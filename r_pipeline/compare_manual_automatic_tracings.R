@@ -5,7 +5,8 @@ if (length(args) < 4L) {
   stop(paste(
     "Aufruf: Rscript compare_manual_automatic_tracings.R",
     "<manual_extraction_dir> <treatment_csv> <automatic_cell_dir> <output_dir>",
-    "[automatic_pixel_size_um] [manual_source_contains] [automatic_job_id] [comparison_label]"
+    "[automatic_pixel_size_um] [manual_source_contains] [automatic_job_id] [comparison_label]",
+    "[automatic_swc_final_dir]"
   ))
 }
 
@@ -17,6 +18,21 @@ automatic_pixel_size_um <- if (length(args) >= 5L) as.numeric(args[[5]]) else 0.
 manual_source_filter <- if (length(args) >= 6L) args[[6]] else ""
 automatic_job_filter <- if (length(args) >= 7L) args[[7]] else ""
 comparison_label <- if (length(args) >= 8L) args[[8]] else ""
+automatic_swc_final_dir <- if (length(args) >= 9L && nzchar(args[[9]])) {
+  normalizePath(args[[9]], winslash = "/", mustWork = TRUE)
+} else {
+  ""
+}
+automatic_is_scevoview_final <- nzchar(automatic_swc_final_dir)
+automatic_coordinate_scale <- if (automatic_is_scevoview_final) 1 else automatic_pixel_size_um
+automatic_trace_description <- if (automatic_is_scevoview_final) {
+  "finale, mit denselben scEvoView-Parserstufen erzeugte swc_final-Dateien"
+} else {
+  sprintf(
+    "exportierte seg-000.swc; fuer diesen Bericht mit %.7f um/px skaliert",
+    automatic_pixel_size_um
+  )
+}
 
 if (!is.finite(automatic_pixel_size_um) || automatic_pixel_size_um <= 0) {
   stop("automatic_pixel_size_um muss eine positive Zahl sein.")
@@ -128,15 +144,23 @@ manual_meta$id <- paste0(manual_meta$raw_id, " | ", manual_meta$group)
 
 automatic_dirs <- list.dirs(automatic_cell_dir, full.names = TRUE, recursive = FALSE)
 automatic_rows <- lapply(automatic_dirs, function(cell_dir) {
-  swc_file <- file.path(cell_dir, "seg-000.swc")
+  raw_swc_file <- file.path(cell_dir, "seg-000.swc")
   review_file <- file.path(cell_dir, "review.json")
-  if (!file.exists(swc_file)) return(NULL)
+  if (!file.exists(raw_swc_file)) return(NULL)
   review <- if (file.exists(review_file)) {
     jsonlite::fromJSON(review_file, simplifyVector = TRUE)
   } else {
     list()
   }
   cell_id <- basename(cell_dir)
+  swc_file <- if (automatic_is_scevoview_final) {
+    file.path(automatic_swc_final_dir, paste0(cell_id, ".swc"))
+  } else {
+    raw_swc_file
+  }
+  if (!file.exists(swc_file)) {
+    stop(sprintf("Normalisierte automatische SWC fehlt: %s", swc_file))
+  }
   case_label <- if (!is.null(review$case) && nzchar(review$case)) review$case else "unbekannt"
   data.frame(
     raw_id = cell_id,
@@ -277,11 +301,8 @@ for (group_name in sort(unique(automatic_meta$group))) {
     group_meta,
     "Automatisch",
     group_name,
-    coordinate_scale = automatic_pixel_size_um,
-    source_description = sprintf(
-      "exportierte seg-000.swc; fuer diesen Bericht mit %.7f um/px skaliert",
-      automatic_pixel_size_um
-    )
+    coordinate_scale = automatic_coordinate_scale,
+    source_description = automatic_trace_description
   )
 }
 
@@ -471,8 +492,13 @@ writeLines(c(
   ),
   "<h2>Strukturvergleich</h2>",
   paste0(
-    "<p>Die Verteilungen vergleichen Gruppen, nicht dieselben Einzelzellen. Die automatische Länge wurde für diese Darstellung ",
-    sprintf("mit %.7f µm/px skaliert. Knotenanzahlen werden bewusst nicht verglichen, weil beide Tracer unterschiedlich dicht samplen.</p>", automatic_pixel_size_um)
+    "<p>Die Verteilungen vergleichen Gruppen, nicht dieselben Einzelzellen. ",
+    if (automatic_is_scevoview_final) {
+      "Beide Quellen verwenden hier ihre finalen, von scEvoView geparsten SWCs. "
+    } else {
+      sprintf("Die automatische Länge wurde für diese Darstellung mit %.7f µm/px skaliert. ", automatic_pixel_size_um)
+    },
+    "Knotenanzahlen werden bewusst nicht verglichen, weil beide Tracer unterschiedlich dicht samplen.</p>"
   ),
   "<div class=\"plot-card\"><img src=\"tracing_comparison.png\" alt=\"Verteilungen von Länge, Verzweigungen und Endpunkten\"></div>",
   "<h2>Kennzahlen</h2>",
@@ -492,12 +518,14 @@ writeLines(c(
   sprintf(
     paste0(
       "<footer><p><strong>Manuelle Quelle:</strong> %s<br>",
-      "<strong>Automatische Quelle:</strong> %s</p>",
-      "<p>Manuell: finale <code>swc_final</code>-Dateien. Automatisch: aktuelle exportierte <code>seg-000.swc</code>; ",
-      "sie wurden im Bericht kalibriert, aber noch nicht als neuer scEvoView-Feature-Extraktionslauf geschrieben.</p></footer></main></body></html>"
+      "<strong>Automatische Zellquelle:</strong> %s<br>",
+      "<strong>Automatische SWC-Quelle:</strong> %s</p>",
+      "<p>Manuell: finale <code>swc_final</code>-Dateien. Automatisch: %s.</p></footer></main></body></html>"
     ),
     htmlEscape(manual_swc_dir),
-    htmlEscape(automatic_cell_dir)
+    htmlEscape(automatic_cell_dir),
+    htmlEscape(if (automatic_is_scevoview_final) automatic_swc_final_dir else automatic_cell_dir),
+    htmlEscape(automatic_trace_description)
   )
 ), index_path, useBytes = TRUE)
 

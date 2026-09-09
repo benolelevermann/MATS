@@ -56,6 +56,8 @@ readAnalyzedSwc <- function(path, cell_id, coordinate_scale = c(1, 1, 1)) {
     y = swc$y[edge_rows],
     xend = swc$x[parent_row[edge_rows]],
     yend = swc$y[parent_row[edge_rows]],
+    type = swc$type[edge_rows],
+    parent_type = swc$type[parent_row[edge_rows]],
     stringsAsFactors = FALSE
   )
   if (nrow(edges)) {
@@ -73,13 +75,18 @@ readAnalyzedSwc <- function(path, cell_id, coordinate_scale = c(1, 1, 1)) {
     type = swc$type,
     x = swc$x,
     y = swc$y,
+    parent = swc$parent,
     role = ifelse(
-      swc$type == 1 | swc$parent < 0,
+      swc$parent < 0,
       "soma",
       ifelse(
-        swc$node %in% branch_nodes,
-        "branch",
-        ifelse(swc$node %in% tip_nodes, "tip", "path")
+        swc$type == 1,
+        "soma_connector",
+        ifelse(
+          swc$node %in% branch_nodes,
+          "branch",
+          ifelse(swc$node %in% tip_nodes, "tip", "path")
+        )
       )
     ),
     stringsAsFactors = FALSE
@@ -92,12 +99,13 @@ readAnalyzedSwc <- function(path, cell_id, coordinate_scale = c(1, 1, 1)) {
       id = cell_id,
       swc_file = normalizePath(path, winslash = "/", mustWork = FALSE),
       nodes = nrow(nodes),
+      neurite_nodes = sum(nodes$type != 1),
       edges = nrow(edges),
-      roots = sum(nodes$role == "soma"),
+      roots = sum(nodes$parent < 0),
       branch_points = sum(nodes$role == "branch"),
       tips = sum(nodes$role == "tip"),
       orphan_parent_links = sum(swc$parent >= 0 & is.na(parent_row)),
-      total_length_2d = sum(edges$length_2d),
+      total_length_2d = sum(edges$length_2d[edges$type != 1]),
       stringsAsFactors = FALSE
     )
   )
@@ -114,7 +122,7 @@ plotAnalyzedSwc <- function(trace, pixel_unit) {
 
   ggplot2::ggplot() +
     ggplot2::geom_segment(
-      data = trace$edges,
+      data = trace$edges[trace$edges$type != 1, , drop = FALSE],
       ggplot2::aes(x = x, y = y, xend = xend, yend = yend),
       color = "#00c6d8",
       linewidth = 0.48,
@@ -138,7 +146,7 @@ plotAnalyzedSwc <- function(trace, pixel_unit) {
       title = trace$qc$id,
       subtitle = sprintf(
         "%d Knoten | %d Verzweigungen | %.1f %s",
-        trace$qc$nodes,
+        trace$qc$neurite_nodes,
         trace$qc$branch_points,
         trace$qc$total_length_2d,
         pixel_unit

@@ -13,10 +13,15 @@ import numpy as np
 import tifffile
 from PIL import Image
 from scipy import ndimage as ndi
-from skimage.morphology import skeletonize
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from canonical_skeleton import canonicalize_skeleton, detached_component_count
 
 
-SCRIPT_VERSION = "r-pipeline-cell-export-v2-2026-07-24"
+SCRIPT_VERSION = "r-pipeline-cell-export-v3-canonical-1px-2026-09-09"
 CONNECTIVITY_8 = np.ones((3, 3), dtype=np.uint8)
 
 
@@ -346,9 +351,20 @@ def write_swc(
     path: Path,
     skeleton: np.ndarray,
     soma: np.ndarray,
-) -> None:
-    """Write a local-coordinate SWC spanning forest rooted at the soma."""
-    thin = skeletonize(skeleton)
+) -> dict[str, int]:
+    """Write a 1-px SWC tree without invisible straight links across background."""
+
+    thin, canonical_report = canonicalize_skeleton(
+        skeleton,
+        soma=soma,
+        max_soma_gap_px=3.0,
+    )
+    soma = np.asarray(soma, dtype=bool)
+    if detached_component_count(thin, soma):
+        raise ValueError(
+            "Skeleton contains a component that is not attached to the soma after "
+            "the allowed 3-px gap repair."
+        )
     soma_coordinates = np.argwhere(soma)
     if soma_coordinates.size:
         soma_y, soma_x = soma_coordinates.mean(axis=0)
@@ -357,63 +373,146 @@ def write_swc(
             math.sqrt(float(soma_coordinates.shape[0]) / math.pi),
         )
     else:
-        skeleton_coordinates = np.argwhere(thin)
-        if skeleton_coordinates.size:
-            soma_y, soma_x = skeleton_coordinates.mean(axis=0)
-        else:
-            soma_y = soma_x = 0.0
-        soma_radius = 1.0
+        raise ValueError("Cannot write a cell SWC without a soma mask.")
 
     labels, count = ndi.label(thin, structure=CONNECTIVITY_8)
-    rows: list[tuple[int, int, float, float, float, float, int]] = [
-        (1, 1, float(soma_x), float(soma_y), 0.0, soma_radius, -1)
-    ]
-    next_node_id = 2
+    root_index = int(
+        np.argmin(
+            (soma_coordinates[:, 0] - soma_y) ** 2
+            + (soma_coordinates[:, 1] - soma_x) ** 2
+        )
+    )
+    soma_root = tuple(map(int, soma_coordinates[root_index]))
+
     height, width = thin.shape
 
+    def neighbors(point: tuple[int, int]):
+        y, x = point
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dy == 0 and dx == 0:
+                    continue
+                ny, nx = y + dy, x + dx
+                if 0 <= ny < height and 0 <= nx < width:
+                    yield ny, nx
+
+    soma_parent: dict[tuple[int, int], tuple[int, int] | None] = {soma_root: None}
+    soma_distance: dict[tuple[int, int], int] = {soma_root: 0}
+    soma_order: list[tuple[int, int]] = [soma_root]
+    queue: deque[tuple[int, int]] = deque([soma_root])
+    while queue:
+        point = queue.popleft()
+        for neighbor in sorted(neighbors(point)):
+            if soma[neighbor] and neighbor not in soma_parent:
+                soma_parent[neighbor] = point
+                soma_distance[neighbor] = soma_distance[point] + 1
+                soma_order.append(neighbor)
+                queue.append(neighbor)
+
+    component_attachments: dict[int, tuple[tuple[int, int], tuple[int, int]]] = {}
+    needed_soma_points: set[tuple[int, int]] = {soma_root}
     for component_id in range(1, count + 1):
-        coordinates = np.argwhere(labels == component_id)
-        if coordinates.size == 0:
-            continue
-        distances = (
-            (coordinates[:, 0] - soma_y) ** 2
-            + (coordinates[:, 1] - soma_x) ** 2
+        candidates: list[
+            tuple[int, int, int, int, int]
+        ] = []
+        for skeleton_y, skeleton_x in np.argwhere(labels == component_id):
+            skeleton_point = (int(skeleton_y), int(skeleton_x))
+            for soma_point in neighbors(skeleton_point):
+                if soma[soma_point] and soma_point in soma_distance:
+                    candidates.append(
+                        (
+                            soma_distance[soma_point],
+                            skeleton_point[0],
+                            skeleton_point[1],
+                            soma_point[0],
+                            soma_point[1],
+                        )
+                    )
+        if not candidates:
+            raise ValueError(
+                f"Skeleton component {component_id} has no explicit soma attachment."
+            )
+        _, skeleton_y, skeleton_x, target_y, target_x = min(candidates)
+        skeleton_point = (skeleton_y, skeleton_x)
+        soma_target = (target_y, target_x)
+        component_attachments[component_id] = (skeleton_point, soma_target)
+        point: tuple[int, int] | None = soma_target
+        while point is not None:
+            needed_soma_points.add(point)
+            point = soma_parent[point]
+
+    rows: list[tuple[int, int, float, float, float, float, int]] = [
+        (
+            1,
+            1,
+            float(soma_root[1]),
+            float(soma_root[0]),
+            0.0,
+            soma_radius,
+            -1,
         )
-        root = tuple(map(int, coordinates[int(np.argmin(distances))]))
-        queue: deque[tuple[tuple[int, int], int]] = deque([(root, 1)])
+    ]
+    next_node_id = 2
+    soma_node_ids: dict[tuple[int, int], int] = {soma_root: 1}
+    for point in soma_order[1:]:
+        if point not in needed_soma_points:
+            continue
+        parent_point = soma_parent[point]
+        if parent_point is None or parent_point not in soma_node_ids:
+            raise RuntimeError("Internal soma connector tree is incomplete.")
+        node_id = next_node_id
+        next_node_id += 1
+        soma_node_ids[point] = node_id
+        rows.append(
+            (
+                node_id,
+                1,
+                float(point[1]),
+                float(point[0]),
+                0.0,
+                1.0,
+                soma_node_ids[parent_point],
+            )
+        )
+
+    for component_id in range(1, count + 1):
+        root, soma_target = component_attachments[component_id]
+        queue_with_parents: deque[tuple[tuple[int, int], int]] = deque(
+            [(root, soma_node_ids[soma_target])]
+        )
         visited: set[tuple[int, int]] = {root}
-        while queue:
-            (y, x), parent_id = queue.popleft()
+        while queue_with_parents:
+            (y, x), parent_id = queue_with_parents.popleft()
             node_id = next_node_id
             next_node_id += 1
             rows.append((node_id, 3, float(x), float(y), 0.0, 1.0, parent_id))
-            neighbors: list[tuple[int, int]] = []
-            for dy in (-1, 0, 1):
-                for dx in (-1, 0, 1):
-                    if dy == 0 and dx == 0:
-                        continue
-                    ny, nx = y + dy, x + dx
-                    point = (ny, nx)
-                    if (
-                        0 <= ny < height
-                        and 0 <= nx < width
-                        and labels[ny, nx] == component_id
-                        and point not in visited
-                    ):
-                        neighbors.append(point)
-            neighbors.sort()
-            for point in neighbors:
+            unvisited_neighbors: list[tuple[int, int]] = []
+            for point in sorted(neighbors((y, x))):
+                if labels[point] == component_id and point not in visited:
+                    unvisited_neighbors.append(point)
+            for point in unvisited_neighbors:
                 visited.add(point)
-                queue.append((point, node_id))
+                queue_with_parents.append((point, node_id))
 
     with path.open("w", encoding="utf-8", newline="\n") as handle:
         handle.write(f"# Generated by {SCRIPT_VERSION}\n")
-        handle.write("# Local crop coordinates; id type x y z radius parent\n")
+        handle.write("# https://github.com/benolelevermann/MATS\n")
+        handle.write("#\n")
+        handle.write("# All positions and radii in pixels\n")
+        handle.write("# Voxel separation (x,y,z): 1.0, 1.0, 1.0\n")
+        handle.write("#\n")
         for row in rows:
             handle.write(
                 f"{row[0]} {row[1]} {row[2]:.3f} {row[3]:.3f} "
                 f"{row[4]:.3f} {row[5]:.3f} {row[6]}\n"
             )
+    return {
+        "nodes": len(rows),
+        "soma_connector_nodes": len(soma_node_ids),
+        "skeleton_nodes": int(thin.sum()),
+        "skeleton_components": int(count),
+        "soma_gap_pixels_added": canonical_report.soma_gap_pixels_added,
+    }
 
 
 def normalize_grayscale(array: np.ndarray) -> np.ndarray:

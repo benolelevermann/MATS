@@ -20,6 +20,8 @@ from PIL import Image
 from scipy import io as sio
 from scipy import ndimage as ndi
 
+from canonical_skeleton import canonicalize_skeleton
+
 
 ProgressCallback = Callable[[str, int, str, dict[str, object] | None], None]
 CONNECTIVITY_8 = np.ones((3, 3), dtype=bool)
@@ -41,6 +43,8 @@ class PipelineSettings:
     hysteresis_alpha: float = 1.0 / 3.0
     hysteresis_t_high: float = 0.647
     hysteresis_t_low: float = 0.326
+    canonicalize_skeleton: bool = True
+    max_soma_gap_px: float = 3.0
     min_soma_area: int = 20
     min_skeleton_pixels: int = 8
     crop_margin: int = 48
@@ -103,6 +107,18 @@ def hysteresis_cli_arguments(settings: PipelineSettings) -> list[str]:
         str(settings.hysteresis_t_high),
         "--t-low",
         str(settings.hysteresis_t_low),
+    ]
+
+
+def canonical_hysteresis_arguments(settings: PipelineSettings) -> list[str]:
+    if not settings.canonicalize_skeleton:
+        return []
+    if settings.max_soma_gap_px < 0:
+        raise ValueError("max_soma_gap_px must be >= 0.")
+    return [
+        "--canonical-1px",
+        "--max-soma-gap-px",
+        str(settings.max_soma_gap_px),
     ]
 
 
@@ -342,6 +358,15 @@ def _export_cell(
     skeleton[local_skeleton_coords[:, 0], local_skeleton_coords[:, 1]] = True
     soma[local_soma_coords[:, 0], local_soma_coords[:, 1]] = True
     skeleton &= ~soma
+    skeleton, canonical_report = canonicalize_skeleton(
+        skeleton,
+        soma=soma,
+        max_soma_gap_px=settings.max_soma_gap_px,
+    )
+    if canonical_report.detached_components_after:
+        raise RuntimeError(
+            "skeleton_has_detached_component_after_canonicalization"
+        )
     cell_mask = skeleton | soma
     if int(ndi.label(soma, structure=CONNECTIVITY_8)[1]) != 1:
         raise RuntimeError("exported_cell_does_not_contain_exactly_one_soma")
@@ -399,6 +424,7 @@ def _export_cell(
             "conflict_group": conflict_group,
             "skeleton_pixels": int(skeleton.sum()),
             "soma_pixels": int(soma.sum()),
+            "canonical_1px": canonical_report.to_dict(),
             "bounds": bounds,
             "location": location,
             "qc": qc or {},
@@ -1183,6 +1209,7 @@ def run_pipeline(
         "--output-dir",
         str(hysteresis_root),
         *hysteresis_cli_arguments(settings),
+        *canonical_hysteresis_arguments(settings),
         "--write-semantic",
         "--overwrite",
     ]
@@ -1230,6 +1257,7 @@ __all__ = [
     "PipelineSettings",
     "default_settings",
     "hysteresis_cli_arguments",
+    "canonical_hysteresis_arguments",
     "extract_single_cells",
     "ensure_review_layers_for_run",
     "run_pipeline",
