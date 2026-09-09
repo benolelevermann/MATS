@@ -5,7 +5,7 @@ if (length(args) < 4L) {
   stop(paste(
     "Aufruf: Rscript compare_manual_automatic_tracings.R",
     "<manual_extraction_dir> <treatment_csv> <automatic_cell_dir> <output_dir>",
-    "[automatic_pixel_size_um]"
+    "[automatic_pixel_size_um] [manual_source_contains] [automatic_job_id] [comparison_label]"
   ))
 }
 
@@ -14,6 +14,9 @@ treatment_csv <- normalizePath(args[[2]], winslash = "/", mustWork = TRUE)
 automatic_cell_dir <- normalizePath(args[[3]], winslash = "/", mustWork = TRUE)
 output_dir <- normalizePath(args[[4]], winslash = "/", mustWork = FALSE)
 automatic_pixel_size_um <- if (length(args) >= 5L) as.numeric(args[[5]]) else 0.2875008
+manual_source_filter <- if (length(args) >= 6L) args[[6]] else ""
+automatic_job_filter <- if (length(args) >= 7L) args[[7]] else ""
+comparison_label <- if (length(args) >= 8L) args[[8]] else ""
 
 if (!is.finite(automatic_pixel_size_um) || automatic_pixel_size_um <= 0) {
   stop("automatic_pixel_size_um muss eine positive Zahl sein.")
@@ -67,6 +70,19 @@ required_manual_columns <- c("id", "treatment")
 if (!all(required_manual_columns %in% colnames(manual_assignments))) {
   stop("Treatment-Tabelle muss die Spalten 'id' und 'treatment' enthalten.")
 }
+if (nzchar(manual_source_filter)) {
+  if (!("matched_original_name" %in% colnames(manual_assignments))) {
+    stop("Die manuelle Quellbild-Auswahl benoetigt die Spalte 'matched_original_name'.")
+  }
+  manual_assignments <- manual_assignments[
+    grepl(manual_source_filter, manual_assignments$matched_original_name, fixed = TRUE),
+    ,
+    drop = FALSE
+  ]
+  if (!nrow(manual_assignments)) {
+    stop(sprintf("Keine manuelle Zelle passt zum Quellbild-Filter: %s", manual_source_filter))
+  }
+}
 manual_swc_dir <- file.path(manual_extraction_dir, "swc_final")
 if (!dir.exists(manual_swc_dir)) {
   stop(sprintf("Manueller swc_final-Ordner fehlt: %s", manual_swc_dir))
@@ -104,6 +120,22 @@ automatic_rows <- lapply(automatic_dirs, function(cell_dir) {
 automatic_meta <- do.call(rbind, Filter(Negate(is.null), automatic_rows))
 if (is.null(automatic_meta) || !nrow(automatic_meta)) {
   stop(sprintf("Keine automatischen seg-000.swc gefunden: %s", automatic_cell_dir))
+}
+if (nzchar(automatic_job_filter)) {
+  automatic_meta <- automatic_meta[
+    !is.na(automatic_meta$job_id) & automatic_meta$job_id == automatic_job_filter,
+    ,
+    drop = FALSE
+  ]
+  if (!nrow(automatic_meta)) {
+    stop(sprintf("Keine automatische Zelle passt zur Job-ID: %s", automatic_job_filter))
+  }
+}
+if (nzchar(comparison_label)) {
+  manual_meta$group <- comparison_label
+  manual_meta$id <- paste0(manual_meta$raw_id, " | ", comparison_label)
+  automatic_meta$group <- comparison_label
+  automatic_meta$id <- paste0(automatic_meta$raw_id, " | ", comparison_label)
 }
 
 galleries <- list()
@@ -284,7 +316,7 @@ gallery_cards <- vapply(seq_len(nrow(gallery_table)), function(index) {
 }, character(1))
 
 automatic_cases <- sort(unique(automatic_meta$group))
-automatic_has_dmso <- any(tolower(automatic_cases) == "dmso")
+automatic_has_dmso <- any(grepl("dmso", tolower(automatic_cases), fixed = TRUE))
 mismatch_note <- if (!automatic_has_dmso) {
   sprintf(
     paste0(
@@ -296,6 +328,19 @@ mismatch_note <- if (!automatic_has_dmso) {
     ),
     htmlEscape(basename(automatic_cell_dir)),
     htmlEscape(paste(sprintf("%s (%d)", names(table(automatic_meta$group)), as.integer(table(automatic_meta$group))), collapse = " und "))
+  )
+} else {
+  ""
+}
+scope_note <- if (nzchar(manual_source_filter) || nzchar(automatic_job_filter)) {
+  sprintf(
+    paste0(
+      "<div class=\"scope\"><strong>Vergleichsbereich:</strong> ",
+      "Manuelles Quellbild enthält <code>%s</code>; automatischer Lauf <code>%s</code>. ",
+      "Damit stammen beide Gruppen aus derselben Aufnahme.</div>"
+    ),
+    htmlEscape(manual_source_filter),
+    htmlEscape(automatic_job_filter)
   )
 } else {
   ""
@@ -312,7 +357,7 @@ writeLines(c(
     "header,main{width:min(1500px,calc(100% - 40px));margin:auto}header{padding:46px 0 22px}",
     "h1{font:clamp(34px,5vw,60px)/1.05 Georgia,serif;margin:0 0 12px;max-width:950px}h2{font:32px Georgia,serif;margin:44px 0 14px}",
     "h3{font-size:24px;margin:4px 0}.lead{font-size:18px;color:var(--muted);max-width:1000px}",
-    ".warning{background:#fff3cf;border-left:6px solid #d59b12;padding:16px 18px;margin:22px 0;border-radius:4px}",
+    ".warning,.scope{padding:16px 18px;margin:22px 0;border-radius:4px}.warning{background:#fff3cf;border-left:6px solid #d59b12}.scope{background:#dff3ec;border-left:6px solid var(--manual)}",
     ".facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:22px 0}",
     ".fact,.gallery,.plot-card,.table-card{background:var(--card);padding:18px;box-shadow:0 12px 34px #17211d12}",
     ".fact strong{font:34px Georgia,serif;display:block}.fact span{color:var(--muted)}",
@@ -328,12 +373,13 @@ writeLines(c(
     paste0(
       "<header><h1>Manuelle und automatische Skeleton-Tracings</h1>",
       "<p class=\"lead\">Vollständige Sichtkontrolle der SWC-Bäume und ein technischer Gruppenvergleich. ",
-      "Cyan zeigt den Baum, Magenta die Wurzel beziehungsweise das Soma und Gelb Verzweigungspunkte.</p>%s",
+      "Cyan zeigt den Baum, Magenta die Wurzel beziehungsweise das Soma und Gelb Verzweigungspunkte.</p>%s%s",
       "<div class=\"facts\"><div class=\"fact\"><strong>%d</strong><span>manuelle Zellen</span></div>",
       "<div class=\"fact\"><strong>%d</strong><span>automatische, manuell freigegebene Zellen</span></div>",
       "<div class=\"fact\"><strong>%d</strong><span>Galerien</span></div></div></header><main>"
     ),
     mismatch_note,
+    scope_note,
     nrow(manual_meta),
     nrow(automatic_meta),
     nrow(gallery_table)
