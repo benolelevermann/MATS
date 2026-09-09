@@ -42,6 +42,15 @@ pixel_depth   <- 1
 pixel_unit    <- "microns"
 is_swc_scaled <- FALSE
 
+# --- Kontrolle der tatsaechlich analysierten Skeletons ---
+# TRUE: zeigt die finalen SWC-Baeume direkt im Rmd und speichert alle Seiten als PNG.
+show_analyzed_skeletons <- TRUE
+skeletons_per_page      <- 12L
+# Nur so viele Seiten werden direkt im Rmd gezeigt; im separaten HTML stehen alle.
+skeleton_inline_pages   <- 2L
+# Leer = alle Zellen. Alternativ z.B. c("PBS_0001_0", "PBS_0002_0").
+skeleton_preview_ids    <- character(0)
+
 
 # --- Multiframe: Speedfiles optional ---
 use_speedfiles <- FALSE   # TRUE = cell*_robbisbewertungen.csv erforderlich
@@ -260,6 +269,40 @@ meta_data <- prepareColumns(meta_data)
 
 write.csv(meta_data, file.path(output_dir, "meta_data.csv"), row.names = FALSE)
 message(sprintf("CHECK: meta_data.csv gespeichert (%d Zeilen).", nrow(meta_data)))
+
+```
+
+# ============================================================
+# PHASE 1b - Die wirklich analysierten SWC-Skeletons ansehen
+# ============================================================
+
+Diese Ansicht verwendet **`meta_data$swc_file`**. Das sind die bereits durch
+`parseSWCFilesStepOne/Two()` vorbereiteten und skalierten SWC-Dateien, die im
+naechsten Schritt an die Feature-Extraktion uebergeben werden. Die Darstellung
+zeigt deshalb nicht nur eine Segmentierungsmaske, sondern exakt die Knoten und
+Kanten des analysierten Skeleton-Baums. Magenta markiert den Soma-/Wurzelknoten.
+
+```{r Phase 1b: Analysierte Skeletons, fig.width=16, fig.height=12, results='asis'}
+
+if (isTRUE(show_analyzed_skeletons)) {
+  skeleton_plot_script <- file.path(getwd(), "r_pipeline", "plot_analyzed_skeletons.R")
+  if (!file.exists(skeleton_plot_script)) {
+    skeleton_plot_script <- "C:/Ole/20260721_CellClassification_v2/r_pipeline/plot_analyzed_skeletons.R"
+  }
+  if (!file.exists(skeleton_plot_script)) {
+    stop(sprintf("FEHLER: Skeleton-Plot-Skript nicht gefunden: %s", skeleton_plot_script))
+  }
+  source(skeleton_plot_script)
+  skeleton_preview <- renderAnalyzedSkeletons(
+    meta_data = meta_data,
+    output_dir = output_dir,
+    pixel_unit = pixel_unit,
+    skeletons_per_page = skeletons_per_page,
+    skeleton_preview_ids = skeleton_preview_ids,
+    print_pages = TRUE,
+    max_inline_pages = skeleton_inline_pages
+  )
+}
 
 ```
 
