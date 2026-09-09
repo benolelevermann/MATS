@@ -1,6 +1,13 @@
 # Plot the exact final SWC files used by scEvoView feature extraction.
 
-readAnalyzedSwc <- function(path, cell_id) {
+readAnalyzedSwc <- function(path, cell_id, coordinate_scale = c(1, 1, 1)) {
+  if (!is.numeric(coordinate_scale) || !length(coordinate_scale) %in% c(1L, 3L) ||
+      any(!is.finite(coordinate_scale)) || any(coordinate_scale <= 0)) {
+    stop("coordinate_scale muss eine positive Zahl oder ein positiver x/y/z-Vektor sein.")
+  }
+  if (length(coordinate_scale) == 1L) {
+    coordinate_scale <- rep(coordinate_scale, 3L)
+  }
   if (is.na(path) || !nzchar(path) || !file.exists(path)) {
     warning(sprintf("SWC fehlt fuer %s: %s", cell_id, path), call. = FALSE)
     return(NULL)
@@ -34,6 +41,10 @@ readAnalyzedSwc <- function(path, cell_id) {
     drop = FALSE
   ]
   if (!nrow(swc)) return(NULL)
+  swc$x <- swc$x * coordinate_scale[[1]]
+  swc$y <- swc$y * coordinate_scale[[2]]
+  swc$z <- swc$z * coordinate_scale[[3]]
+  swc$radius <- swc$radius * mean(coordinate_scale[1:2])
 
   parent_row <- match(swc$parent, swc$node)
   edge_rows <- which(swc$parent >= 0 & !is.na(parent_row))
@@ -151,7 +162,11 @@ renderAnalyzedSkeletons <- function(
   skeletons_per_page = 12L,
   skeleton_preview_ids = character(0),
   print_pages = TRUE,
-  max_inline_pages = 2L
+  max_inline_pages = 2L,
+  coordinate_scale = c(1, 1, 1),
+  report_title = "Analysierte SWC-Skeletons",
+  source_description = "meta_data$swc_file (swc_final)",
+  output_subdir = "analyzed_skeletons"
 ) {
   if (!("swc_file" %in% colnames(meta_data))) {
     stop("FEHLER: meta_data besitzt nach dem SWC-Parsing keine Spalte 'swc_file'.")
@@ -187,7 +202,8 @@ renderAnalyzedSkeletons <- function(
   analyzed_traces <- lapply(seq_len(nrow(preview_rows)), function(index) {
     readAnalyzedSwc(
       preview_rows$swc_file[[index]],
-      as.character(preview_rows$id[[index]])
+      as.character(preview_rows$id[[index]]),
+      coordinate_scale = coordinate_scale
     )
   })
   analyzed_traces <- Filter(Negate(is.null), analyzed_traces)
@@ -196,7 +212,7 @@ renderAnalyzedSkeletons <- function(
   }
 
   skeleton_qc <- do.call(rbind, lapply(analyzed_traces, `[[`, "qc"))
-  skeleton_preview_dir <- file.path(output_dir, "analyzed_skeletons")
+  skeleton_preview_dir <- file.path(output_dir, output_subdir)
   dir.create(skeleton_preview_dir, showWarnings = FALSE, recursive = TRUE)
   old_pages <- list.files(
     skeleton_preview_dir,
@@ -227,12 +243,13 @@ renderAnalyzedSkeletons <- function(
     ) +
       patchwork::plot_annotation(
         title = sprintf(
-          "Analysierte SWC-Skeletons - Seite %d/%d",
+          "%s - Seite %d/%d",
+          report_title,
           page_index,
           length(trace_pages)
         ),
         subtitle = paste(
-          "Quelle: meta_data$swc_file (swc_final);",
+          sprintf("Quelle: %s;", source_description),
           "Cyan = Baum, Magenta = Soma/Wurzel, Gelb = Verzweigung"
         )
       )
@@ -271,7 +288,7 @@ renderAnalyzedSkeletons <- function(
     c(
       "<!doctype html><html lang=\"de\"><head><meta charset=\"utf-8\">",
       "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">",
-      "<title>Analysierte SWC-Skeletons</title>",
+      sprintf("<title>%s</title>", report_title),
       paste0(
         "<style>body{margin:0;background:#eef1ec;color:#17211d;font:15px system-ui,sans-serif}",
         "header,main{width:min(1500px,calc(100% - 40px));margin:auto}",
@@ -281,12 +298,13 @@ renderAnalyzedSkeletons <- function(
       ),
       sprintf(
         paste0(
-          "<header><h1>Analysierte SWC-Skeletons</h1>",
-          "<p>%d Zellen · Quelle: <code>meta_data$swc_file</code> aus <code>swc_final</code>. ",
-          "Dies sind die Baeume, die scEvoView analysiert. ",
+          "<header><h1>%s</h1>",
+          "<p>%d Zellen · Quelle: <code>%s</code>. ",
           "<a href=\"analyzed_skeleton_qc.csv\">QC-Tabelle herunterladen</a>.</p></header><main>"
         ),
-        length(analyzed_traces)
+        report_title,
+        length(analyzed_traces),
+        source_description
       ),
       html_cards,
       "</main></body></html>"
