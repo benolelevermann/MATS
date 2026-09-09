@@ -44,6 +44,17 @@ htmlEscape <- function(value) {
   value
 }
 
+resolveStoredPath <- function(value) {
+  normalized <- gsub("\\\\", "/", as.character(value))
+  if (file.exists(normalized)) return(normalized)
+  marker <- "/div10_CC/"
+  marker_position <- regexpr(marker, normalized, fixed = TRUE)
+  if (marker_position[[1]] < 0) return(normalized)
+  relative_start <- marker_position[[1]] + attr(marker_position, "match.length")
+  relative <- substring(normalized, relative_start)
+  file.path(dirname(manual_extraction_dir), relative)
+}
+
 slugify <- function(value) {
   value <- iconv(value, to = "ASCII//TRANSLIT")
   value <- gsub("[^A-Za-z0-9]+", "_", value)
@@ -87,10 +98,29 @@ manual_swc_dir <- file.path(manual_extraction_dir, "swc_final")
 if (!dir.exists(manual_swc_dir)) {
   stop(sprintf("Manueller swc_final-Ordner fehlt: %s", manual_swc_dir))
 }
+manual_pipeline_meta_path <- file.path(manual_extraction_dir, "meta_data.csv")
+manual_pipeline_meta <- utils::read.csv(
+  manual_pipeline_meta_path,
+  stringsAsFactors = FALSE,
+  check.names = FALSE
+)
+manual_pixel_column <- if ("pixel_width_real" %in% colnames(manual_pipeline_meta)) {
+  "pixel_width_real"
+} else {
+  "pixel_width"
+}
+manual_pixel_width <- as.numeric(
+  manual_pipeline_meta[[manual_pixel_column]][match(manual_assignments$id, manual_pipeline_meta$id)]
+)
+if (any(!is.finite(manual_pixel_width)) || any(manual_pixel_width <= 0)) {
+  stop("Ungueltige manuelle Pixelbreite in Extraction/meta_data.csv.")
+}
 manual_meta <- data.frame(
   raw_id = as.character(manual_assignments$id),
   group = as.character(manual_assignments$treatment),
   swc_file = file.path(manual_swc_dir, paste0(manual_assignments$id, ".swc")),
+  cellfolder = vapply(manual_assignments$cellfolder, resolveStoredPath, character(1)),
+  overlay_coordinate_scale = 1 / manual_pixel_width,
   stringsAsFactors = FALSE
 )
 manual_meta <- manual_meta[file.exists(manual_meta$swc_file), , drop = FALSE]
@@ -113,6 +143,7 @@ automatic_rows <- lapply(automatic_dirs, function(cell_dir) {
     group = as.character(case_label),
     job_id = if (!is.null(review$job_id)) as.character(review$job_id) else NA_character_,
     swc_file = swc_file,
+    cellfolder = cell_dir,
     id = paste0(cell_id, " | ", case_label),
     stringsAsFactors = FALSE
   )
@@ -137,6 +168,58 @@ if (nzchar(comparison_label)) {
   automatic_meta$group <- comparison_label
   automatic_meta$id <- paste0(automatic_meta$raw_id, " | ", comparison_label)
 }
+
+image_manifest <- rbind(
+  data.frame(
+    raw_id = manual_meta$raw_id,
+    source_kind = "Manuell",
+    group = manual_meta$group,
+    raw_file = file.path(manual_meta$cellfolder, "raw.tif"),
+    export_preview_file = "",
+    overlay_swc_file = file.path(manual_meta$cellfolder, "seg.swc"),
+    overlay_coordinate_scale = manual_meta$overlay_coordinate_scale,
+    stringsAsFactors = FALSE
+  ),
+  data.frame(
+    raw_id = automatic_meta$raw_id,
+    source_kind = "Automatisch",
+    group = automatic_meta$group,
+    raw_file = file.path(automatic_meta$cellfolder, "raw_preview.png"),
+    export_preview_file = file.path(automatic_meta$cellfolder, "preview.png"),
+    overlay_swc_file = "",
+    overlay_coordinate_scale = 1,
+    stringsAsFactors = FALSE
+  )
+)
+image_manifest_path <- file.path(output_dir, "cell_image_manifest.csv")
+utils::write.csv(image_manifest, image_manifest_path, row.names = FALSE, fileEncoding = "UTF-8")
+gallery_builder <- file.path(script_dir, "build_tracing_image_gallery.py")
+project_python <- file.path(dirname(script_dir), ".venv", "Scripts", "python.exe")
+python_executable <- if (file.exists(project_python)) project_python else Sys.which("python")
+if (!nzchar(python_executable) || !file.exists(gallery_builder)) {
+  stop("Python oder build_tracing_image_gallery.py fehlt fuer die Zellbild-Galerie.")
+}
+gallery_output_dir <- file.path(output_dir, "cell_images")
+gallery_log <- system2(
+  python_executable,
+  c(
+    shQuote(gallery_builder),
+    "--manifest", shQuote(image_manifest_path),
+    "--output-dir", shQuote(gallery_output_dir)
+  ),
+  stdout = TRUE,
+  stderr = TRUE
+)
+gallery_status <- attr(gallery_log, "status")
+if (!is.null(gallery_status) && gallery_status != 0) {
+  stop(sprintf("Zellbild-Galerie fehlgeschlagen:\n%s", paste(gallery_log, collapse = "\n")))
+}
+message(paste(gallery_log, collapse = "\n"))
+gallery_fragment_path <- file.path(gallery_output_dir, "gallery_fragment.inc")
+if (!file.exists(gallery_fragment_path)) {
+  stop("Die Zellbild-Galerie hat kein HTML-Fragment erzeugt.")
+}
+cell_gallery_html <- paste(readLines(gallery_fragment_path, encoding = "UTF-8"), collapse = "\n")
 
 galleries <- list()
 qc_tables <- list()
@@ -367,6 +450,8 @@ writeLines(c(
     ".pill.manual{background:var(--manual)}.pill.automatic{background:var(--auto)}",
     ".gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:18px}.gallery{display:grid;gap:12px}.eyebrow{color:var(--muted);text-transform:uppercase;letter-spacing:.12em;font-size:11px;font-weight:bold}",
     ".button{display:inline-block;background:var(--ink);color:white;text-decoration:none;padding:10px 14px;border-radius:4px;width:max-content}",
+    ".cell-source{margin:0 0 32px}.cell-source-head{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 12px}.cell-source-head span{font:27px Georgia,serif}.cell-source-head strong{color:var(--muted)}",
+    ".cell-image-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(410px,1fr));gap:14px}.cell-image-card{background:#fff;padding:12px;box-shadow:0 8px 28px #17211d10}.cell-image-card h3{font:600 13px system-ui,sans-serif;overflow-wrap:anywhere;margin:0 0 9px}.cell-image-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cell-image-pair figure{margin:0}.cell-image-pair img{display:block;width:100%;aspect-ratio:1;object-fit:contain;background:#101614}.cell-image-pair figcaption{font-size:12px;color:var(--muted);padding-top:5px}",
     "code{background:#e5e9e4;padding:2px 5px;border-radius:3px}footer{color:var(--muted);padding:45px 0 70px}</style></head><body>"
   ),
   sprintf(
@@ -398,6 +483,9 @@ writeLines(c(
   ),
   summary_rows,
   "</tbody></table><p><a href=\"group_summary.csv\">Gruppentabelle</a> · <a href=\"trace_qc_all.csv\">Einzelzell-QC</a></p></div>",
+  "<h2>Rohbilder und exportierte Zellen</h2>",
+  "<p>Links steht jeweils das Zell-Rohbild. Rechts steht beim manuellen Datensatz das SWC auf dem Rohbild und beim automatischen Datensatz der tatsächlich isolierte Export-Crop.</p>",
+  cell_gallery_html,
   "<h2>Alle Skeletons</h2><p>Ein Klick öffnet jede Gruppe über alle Seiten.</p><div class=\"gallery-grid\">",
   gallery_cards,
   "</div>",
