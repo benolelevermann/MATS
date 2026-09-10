@@ -55,6 +55,11 @@ if (Test-Path -LiteralPath $rawDataset) {
 
 Write-Host "Rohdaten: $rawDataset" -ForegroundColor Green
 Write-Host "HTML-Uebersicht: $(Join-Path $rawDataset 'synthetic_multicell_review.html')"
+$holdoutGuard = Join-Path $projectRoot "evo_test_holdout.py"
+& $python $holdoutGuard check --dataset $rawDataset
+if ($LASTEXITCODE -ne 0) {
+    throw "Dataset143 enthaelt den permanenten EvoTest/div10_CC-Hold-out und wird nicht weiterverarbeitet."
+}
 if (-not $Preprocess) {
     Write-Host "Zum anschliessenden nnU-Net-Preprocessing dasselbe Skript mit -Preprocess starten."
     exit 0

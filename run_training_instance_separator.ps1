@@ -26,6 +26,12 @@ foreach ($required in @(
     }
 }
 
+$holdoutGuard = Join-Path $projectRoot "evo_test_holdout.py"
+& $python $holdoutGuard check --dataset $dataset
+if ($LASTEXITCODE -ne 0) {
+    throw "Training abgebrochen: Der permanente EvoTest/div10_CC-Hold-out ist im Datensatz enthalten."
+}
+
 $arguments = @(
     (Join-Path $projectRoot "train_instance_separator.py"),
     "--dataset-root", $dataset,

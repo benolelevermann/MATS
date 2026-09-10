@@ -30,6 +30,11 @@ foreach ($required in @($python, $preprocessedDataset, $splitFile, $plansFile)) 
 $env:nnUNet_raw = Join-Path $projectRoot "nnUNet_raw"
 $env:nnUNet_preprocessed = Join-Path $projectRoot "nnUNet_preprocessed"
 $env:nnUNet_results = Join-Path $projectRoot "nnUNet_results"
+$holdoutGuard = Join-Path $projectRoot "evo_test_holdout.py"
+& $python $holdoutGuard check --dataset (Join-Path $env:nnUNet_raw $dataset)
+if ($LASTEXITCODE -ne 0) {
+    throw "Training abgebrochen: Der permanente EvoTest/div10_CC-Hold-out ist im Datensatz enthalten."
+}
 $externalTrainerPath = Join-Path $projectRoot "custom_trainers\skeleton_recall"
 $env:nnUNet_extTrainer = $externalTrainerPath
 $pythonPathEntries = @($externalTrainerPath)

@@ -60,6 +60,7 @@ New Text Document.txt
 /nnUNet_results/
 
 # Generated reviews, predictions, comparisons and cell exports
+/EvoTest/
 /20[0-9][0-9]*/
 /web_pipeline_runs*/
 /review_dataset/

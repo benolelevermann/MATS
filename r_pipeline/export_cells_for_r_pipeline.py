@@ -21,7 +21,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from canonical_skeleton import canonicalize_skeleton, detached_component_count
 
 
-SCRIPT_VERSION = "r-pipeline-cell-export-v4-manual-style-1px-2026-09-10"
+SCRIPT_VERSION = "r-pipeline-cell-export-v5-snt-shared-root-2026-09-10"
 CONNECTIVITY_8 = np.ones((3, 3), dtype=np.uint8)
 
 
@@ -351,13 +351,16 @@ def write_swc(
     path: Path,
     skeleton: np.ndarray,
     soma: np.ndarray,
-) -> dict[str, int]:
-    """Write a manual-style SWC rooted at the soma centroid.
+) -> dict[str, int | float]:
+    """Write an SNT-style SWC with a shared primary-neurite root.
 
     Every primary neurite must explicitly touch the soma mask. Its first node is
-    connected directly to the single soma root, matching the structure used by
-    manually traced SNT exports. All remaining neurite edges follow adjacent
-    pixels of the canonical 1-px mask.
+    connected directly to one shared root. Manual SNT exports place this zero-
+    length ``Shared root`` between the starts of otherwise independent primary
+    paths, rather than at the centroid of the complete soma. We reproduce that
+    convention by using the arithmetic mean of the soma-adjacent component
+    roots. All remaining neurite edges follow adjacent pixels of the canonical
+    1-px mask.
     """
 
     thin, canonical_report = canonicalize_skeleton(
@@ -412,12 +415,18 @@ def write_swc(
             map(int, candidates[int(np.argmin(distances))])
         )
 
+    shared_root_y = float(
+        np.mean([point[0] for point in component_roots.values()])
+    )
+    shared_root_x = float(
+        np.mean([point[1] for point in component_roots.values()])
+    )
     rows: list[tuple[int, int, float, float, float, float, int]] = [
         (
             1,
             1,
-            float(soma_x),
-            float(soma_y),
+            shared_root_x,
+            shared_root_y,
             0.0,
             soma_radius,
             -1,
@@ -462,6 +471,8 @@ def write_swc(
         "skeleton_nodes": int(thin.sum()),
         "skeleton_components": int(count),
         "soma_gap_pixels_added": canonical_report.soma_gap_pixels_added,
+        "shared_root_x": shared_root_x,
+        "shared_root_y": shared_root_y,
     }
 
 

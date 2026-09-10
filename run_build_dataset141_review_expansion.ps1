@@ -54,6 +54,11 @@ if (-not $ResumePreprocess) {
     }
     Write-Host "Vorhandenes Dataset141 wird nur ab dem Preprocessing fortgesetzt." -ForegroundColor Yellow
 }
+$holdoutGuard = Join-Path $projectRoot "evo_test_holdout.py"
+& $python $holdoutGuard check --dataset $targetDataset
+if ($LASTEXITCODE -ne 0) {
+    throw "Dataset141 enthaelt den permanenten EvoTest/div10_CC-Hold-out und wird nicht weiterverarbeitet."
+}
 if (-not $RunPreprocess) { return }
 
 $env:nnUNet_raw = Join-Path $projectRoot "nnUNet_raw"

@@ -35,6 +35,11 @@ if ($Train -and -not $RunPreprocess) {
 if ($LASTEXITCODE -ne 0) { throw "Dataset139 konnte nicht erstellt werden." }
 
 Write-Host "Dataset139 wurde erstellt: $targetDataset" -ForegroundColor Green
+$holdoutGuard = Join-Path $projectRoot "evo_test_holdout.py"
+& $python $holdoutGuard check --dataset $targetDataset
+if ($LASTEXITCODE -ne 0) {
+    throw "Dataset139 enthaelt den permanenten EvoTest/div10_CC-Hold-out und wird nicht weiterverarbeitet."
+}
 if (-not $RunPreprocess) {
     Write-Host "Naechster Schritt: denselben Befehl nicht erneut starten, sondern Dataset139 preprocessen und trainieren."
     exit 0
@@ -58,4 +63,3 @@ if (-not $Train) { exit 0 }
     -p nnUNetPlans `
     -device $Device
 if ($LASTEXITCODE -ne 0) { throw "Training von Dataset139 ist fehlgeschlagen." }
-

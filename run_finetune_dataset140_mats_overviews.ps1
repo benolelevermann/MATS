@@ -100,6 +100,12 @@ foreach ($required in @($rawDataset, $preprocessedDataset, $splitTarget)) {
     }
 }
 
+$holdoutGuard = Join-Path $projectRoot "evo_test_holdout.py"
+& $python $holdoutGuard check --dataset $rawDataset
+if ($LASTEXITCODE -ne 0) {
+    throw "Training abgebrochen: Der permanente EvoTest/div10_CC-Hold-out ist im Datensatz enthalten."
+}
+
 $resultFolder = Join-Path $env:nnUNet_results "$dataset\${trainer}__${targetPlansName}__2d\fold_0"
 $finalCheckpoint = Join-Path $resultFolder "checkpoint_final.pth"
 $latestCheckpoint = Join-Path $resultFolder "checkpoint_latest.pth"

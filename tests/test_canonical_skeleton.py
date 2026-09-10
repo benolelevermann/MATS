@@ -76,8 +76,8 @@ class CanonicalSkeletonTests(unittest.TestCase):
         soma = np.zeros((48, 48), dtype=bool)
         soma[18:30, 18:30] = True
         skeleton = np.zeros_like(soma)
-        skeleton[23, 7:18] = True
-        skeleton[24, 30:43] = True
+        skeleton[19, 7:18] = True
+        skeleton[21, 30:43] = True
 
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "cell.swc"
@@ -107,6 +107,20 @@ class CanonicalSkeletonTests(unittest.TestCase):
                 edge_lengths.append(np.hypot(x - parent_x, y - parent_y))
         self.assertEqual(nodes[1][0], 1)
         self.assertEqual(soma_child_count, 2)
+        soma_children = [
+            (x, y)
+            for _node_id, (_node_type, x, y, parent_id) in nodes.items()
+            if parent_id == 1
+        ]
+        self.assertAlmostEqual(
+            nodes[1][1],
+            sum(point[0] for point in soma_children) / len(soma_children),
+        )
+        self.assertAlmostEqual(
+            nodes[1][2],
+            sum(point[1] for point in soma_children) / len(soma_children),
+        )
+        self.assertNotAlmostEqual(nodes[1][2], 23.5)
         self.assertLessEqual(max(edge_lengths), np.sqrt(2) + 1e-6)
         self.assertEqual(report["skeleton_nodes"], int(skeleton.sum()))
         self.assertEqual(report["soma_connector_nodes"], 1)
