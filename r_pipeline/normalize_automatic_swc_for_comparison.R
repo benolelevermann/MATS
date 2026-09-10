@@ -18,11 +18,6 @@ if (!is.finite(pixel_width_um) || pixel_width_um <= 0) {
   stop("pixel_width_um muss eine positive Zahl sein.")
 }
 
-script_arg <- commandArgs(trailingOnly = FALSE)
-script_path <- sub("^--file=", "", script_arg[grepl("^--file=", script_arg)][1])
-script_dir <- dirname(normalizePath(script_path, winslash = "/", mustWork = TRUE))
-source(file.path(script_dir, "restore_mats_swc_types.R"))
-
 suppressPackageStartupMessages(library(devtools))
 required_packages <- c("strex", "stringr")
 missing_packages <- required_packages[
@@ -85,7 +80,6 @@ if ("pixel_unit_real" %in% names(meta_data)) {
   meta_data$pixel_unit_real <- "microns"
 }
 meta_data <- parseSWCFilesStepTwo(meta_data, output_dir)
-meta_data <- restoreMatsGeneratedSwcTypes(meta_data)
 
 metadata_path <- file.path(output_dir, "meta_data.csv")
 utils::write.csv(meta_data, metadata_path, row.names = FALSE)

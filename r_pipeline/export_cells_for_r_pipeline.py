@@ -21,7 +21,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from canonical_skeleton import canonicalize_skeleton, detached_component_count
 
 
-SCRIPT_VERSION = "r-pipeline-cell-export-v3-canonical-1px-2026-09-09"
+SCRIPT_VERSION = "r-pipeline-cell-export-v4-manual-style-1px-2026-09-10"
 CONNECTIVITY_8 = np.ones((3, 3), dtype=np.uint8)
 
 
@@ -352,7 +352,13 @@ def write_swc(
     skeleton: np.ndarray,
     soma: np.ndarray,
 ) -> dict[str, int]:
-    """Write a 1-px SWC tree without invisible straight links across background."""
+    """Write a manual-style SWC rooted at the soma centroid.
+
+    Every primary neurite must explicitly touch the soma mask. Its first node is
+    connected directly to the single soma root, matching the structure used by
+    manually traced SNT exports. All remaining neurite edges follow adjacent
+    pixels of the canonical 1-px mask.
+    """
 
     thin, canonical_report = canonicalize_skeleton(
         skeleton,
@@ -376,14 +382,6 @@ def write_swc(
         raise ValueError("Cannot write a cell SWC without a soma mask.")
 
     labels, count = ndi.label(thin, structure=CONNECTIVITY_8)
-    root_index = int(
-        np.argmin(
-            (soma_coordinates[:, 0] - soma_y) ** 2
-            + (soma_coordinates[:, 1] - soma_x) ** 2
-        )
-    )
-    soma_root = tuple(map(int, soma_coordinates[root_index]))
-
     height, width = thin.shape
 
     def neighbors(point: tuple[int, int]):
@@ -396,89 +394,41 @@ def write_swc(
                 if 0 <= ny < height and 0 <= nx < width:
                     yield ny, nx
 
-    soma_parent: dict[tuple[int, int], tuple[int, int] | None] = {soma_root: None}
-    soma_distance: dict[tuple[int, int], int] = {soma_root: 0}
-    soma_order: list[tuple[int, int]] = [soma_root]
-    queue: deque[tuple[int, int]] = deque([soma_root])
-    while queue:
-        point = queue.popleft()
-        for neighbor in sorted(neighbors(point)):
-            if soma[neighbor] and neighbor not in soma_parent:
-                soma_parent[neighbor] = point
-                soma_distance[neighbor] = soma_distance[point] + 1
-                soma_order.append(neighbor)
-                queue.append(neighbor)
-
-    component_attachments: dict[int, tuple[tuple[int, int], tuple[int, int]]] = {}
-    needed_soma_points: set[tuple[int, int]] = {soma_root}
+    component_roots: dict[int, tuple[int, int]] = {}
+    adjacent_to_soma = ndi.binary_dilation(soma, structure=CONNECTIVITY_8)
     for component_id in range(1, count + 1):
-        candidates: list[
-            tuple[int, int, int, int, int]
-        ] = []
-        for skeleton_y, skeleton_x in np.argwhere(labels == component_id):
-            skeleton_point = (int(skeleton_y), int(skeleton_x))
-            for soma_point in neighbors(skeleton_point):
-                if soma[soma_point] and soma_point in soma_distance:
-                    candidates.append(
-                        (
-                            soma_distance[soma_point],
-                            skeleton_point[0],
-                            skeleton_point[1],
-                            soma_point[0],
-                            soma_point[1],
-                        )
-                    )
-        if not candidates:
+        candidates = np.argwhere(
+            (labels == component_id) & adjacent_to_soma
+        )
+        if candidates.size == 0:
             raise ValueError(
                 f"Skeleton component {component_id} has no explicit soma attachment."
             )
-        _, skeleton_y, skeleton_x, target_y, target_x = min(candidates)
-        skeleton_point = (skeleton_y, skeleton_x)
-        soma_target = (target_y, target_x)
-        component_attachments[component_id] = (skeleton_point, soma_target)
-        point: tuple[int, int] | None = soma_target
-        while point is not None:
-            needed_soma_points.add(point)
-            point = soma_parent[point]
+        distances = (
+            (candidates[:, 0] - soma_y) ** 2
+            + (candidates[:, 1] - soma_x) ** 2
+        )
+        component_roots[component_id] = tuple(
+            map(int, candidates[int(np.argmin(distances))])
+        )
 
     rows: list[tuple[int, int, float, float, float, float, int]] = [
         (
             1,
             1,
-            float(soma_root[1]),
-            float(soma_root[0]),
+            float(soma_x),
+            float(soma_y),
             0.0,
             soma_radius,
             -1,
         )
     ]
     next_node_id = 2
-    soma_node_ids: dict[tuple[int, int], int] = {soma_root: 1}
-    for point in soma_order[1:]:
-        if point not in needed_soma_points:
-            continue
-        parent_point = soma_parent[point]
-        if parent_point is None or parent_point not in soma_node_ids:
-            raise RuntimeError("Internal soma connector tree is incomplete.")
-        node_id = next_node_id
-        next_node_id += 1
-        soma_node_ids[point] = node_id
-        rows.append(
-            (
-                node_id,
-                1,
-                float(point[1]),
-                float(point[0]),
-                0.0,
-                1.0,
-                soma_node_ids[parent_point],
-            )
-        )
 
     for component_id in range(1, count + 1):
-        root, soma_target = component_attachments[component_id]
+        root = component_roots[component_id]
         queue_with_parents: deque[tuple[tuple[int, int], int]] = deque(
-            [(root, soma_node_ids[soma_target])]
+            [(root, 1)]
         )
         visited: set[tuple[int, int]] = {root}
         while queue_with_parents:
@@ -508,7 +458,7 @@ def write_swc(
             )
     return {
         "nodes": len(rows),
-        "soma_connector_nodes": len(soma_node_ids),
+        "soma_connector_nodes": 1,
         "skeleton_nodes": int(thin.sum()),
         "skeleton_components": int(count),
         "soma_gap_pixels_added": canonical_report.soma_gap_pixels_added,

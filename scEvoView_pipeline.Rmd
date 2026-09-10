@@ -265,20 +265,6 @@ if (any(is.na(meta_data$pixel_depth)))
   stop("FEHLER: pixel_depth enthaelt NAs - bitte manuell setzen.")
 
 meta_data <- parseSWCFilesStepTwo(meta_data, output_dir)
-
-# Der Legacy-Parser setzt alle Nicht-Wurzel-Knoten auf Typ 2. Bei den neuen
-# MATS-v3-Exports markieren Typ-1-Knoten jedoch ausschließlich den pixelweisen
-# Weg innerhalb des Somas. Stelle diese Markierung wieder her, damit diese
-# Hilfskanten weder als Neurit gezeichnet noch als Neuritenlänge gezählt werden.
-mats_swc_type_script <- file.path(getwd(), "r_pipeline", "restore_mats_swc_types.R")
-if (!file.exists(mats_swc_type_script)) {
-  mats_swc_type_script <- "C:/Ole/20260721_CellClassification_v2/r_pipeline/restore_mats_swc_types.R"
-}
-if (file.exists(mats_swc_type_script)) {
-  source(mats_swc_type_script)
-  meta_data <- restoreMatsGeneratedSwcTypes(meta_data)
-}
-
 meta_data <- prepareColumns(meta_data)
 
 write.csv(meta_data, file.path(output_dir, "meta_data.csv"), row.names = FALSE)

@@ -18,6 +18,9 @@ automatic_pixel_size_um <- if (length(args) >= 5L) as.numeric(args[[5]]) else 0.
 manual_source_filter <- if (length(args) >= 6L) args[[6]] else ""
 automatic_job_filter <- if (length(args) >= 7L) args[[7]] else ""
 comparison_label <- if (length(args) >= 8L) args[[8]] else ""
+if (identical(manual_source_filter, "-")) manual_source_filter <- ""
+if (identical(automatic_job_filter, "-")) automatic_job_filter <- ""
+if (identical(comparison_label, "-")) comparison_label <- ""
 automatic_swc_final_dir <- if (length(args) >= 9L && nzchar(args[[9]])) {
   normalizePath(args[[9]], winslash = "/", mustWork = TRUE)
 } else {

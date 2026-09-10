@@ -72,7 +72,7 @@ class CanonicalSkeletonTests(unittest.TestCase):
         self.assertLessEqual(set(np.unique(canonical).tolist()), {0, 1, 2})
         self.assertTrue(is_canonical_one_pixel(canonical == 1))
 
-    def test_swc_uses_only_explicit_adjacent_edges(self) -> None:
+    def test_swc_uses_manual_style_soma_root_links(self) -> None:
         soma = np.zeros((48, 48), dtype=bool)
         soma[18:30, 18:30] = True
         skeleton = np.zeros_like(soma)
@@ -88,20 +88,28 @@ class CanonicalSkeletonTests(unittest.TestCase):
                     continue
                 fields = line_text.split()
                 nodes[int(fields[0])] = (
+                    int(fields[1]),
                     float(fields[2]),
                     float(fields[3]),
                     int(fields[6]),
                 )
 
         edge_lengths = []
-        for node_id, (x, y, parent_id) in nodes.items():
+        soma_child_count = 0
+        for node_id, (node_type, x, y, parent_id) in nodes.items():
             if parent_id < 0:
                 continue
-            parent_x, parent_y, _ = nodes[parent_id]
-            edge_lengths.append(np.hypot(x - parent_x, y - parent_y))
+            _, parent_x, parent_y, _ = nodes[parent_id]
+            if parent_id == 1:
+                soma_child_count += 1
+                self.assertEqual(node_type, 3)
+            else:
+                edge_lengths.append(np.hypot(x - parent_x, y - parent_y))
+        self.assertEqual(nodes[1][0], 1)
+        self.assertEqual(soma_child_count, 2)
         self.assertLessEqual(max(edge_lengths), np.sqrt(2) + 1e-6)
         self.assertEqual(report["skeleton_nodes"], int(skeleton.sum()))
-        self.assertGreater(report["soma_connector_nodes"], 1)
+        self.assertEqual(report["soma_connector_nodes"], 1)
 
     def test_swc_rejects_a_hidden_long_background_connection(self) -> None:
         soma = np.zeros((48, 48), dtype=bool)
