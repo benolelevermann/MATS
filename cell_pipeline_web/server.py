@@ -27,6 +27,11 @@ import tifffile
 
 from .fov_library import DEFAULT_FOV_ROOT, FovLibrary
 from .dataset_inspector import TrainingDatasetInspector
+from .evo_export_layout import (
+    iter_evo_cell_folders,
+    relative_evo_cell_folder,
+    source_image_folder,
+)
 from .pipeline import (
     PipelineSettings,
     _write_preview,
@@ -407,7 +412,7 @@ class JobStore:
         cells_root = self.review_root / "cells"
         identifiers = {
             int(match.group(1))
-            for path in cells_root.glob("cell*")
+            for path in iter_evo_cell_folders(cells_root)
             if path.is_dir() and (match := re.fullmatch(r"cell(\d+)", path.name))
         }
         for review_path in self.runs_root.glob("*/05_review/reviews.json"):
@@ -448,8 +453,16 @@ class JobStore:
             if result == "good":
                 raise RuntimeError("Approved Evo cell has no valid output folder.")
             return
-        target = self.review_root / "cells" / output_folder
+        image_folder = str(review.get("evo_image_folder") or "")
+        if not image_folder or Path(image_folder).name != image_folder:
+            if result == "good":
+                raise RuntimeError("Approved Evo cell has no valid source-image folder.")
+            return
+        target = self.review_root / "cells" / image_folder / output_folder
         self._remove_generated_directory(target, allowed_roots)
+        legacy_target = self.review_root / "cells" / output_folder
+        if legacy_target != target:
+            self._remove_generated_directory(legacy_target, allowed_roots)
         if result != "good":
             return
 
@@ -476,6 +489,8 @@ class JobStore:
             | {
                 "source_job": job_id,
                 "source_cell": folder,
+                "source_image": self._jobs[job_id].get("filename"),
+                "evo_image_folder": image_folder,
                 "review_id": self._review_id(job_id, folder),
             },
         )
@@ -578,6 +593,8 @@ class JobStore:
                     "postprocessing",
                     "approved_for_training",
                     "approved_for_evo",
+                    "source_image",
+                    "evo_image_folder",
                     "evo_cell_folder",
                     "updated_at",
                 ],
@@ -601,6 +618,8 @@ class JobStore:
                             _review_result(review) == "good"
                             and self.review_mode == "evo"
                         ),
+                        "source_image": self._jobs.get(job_id, {}).get("filename", ""),
+                        "evo_image_folder": review.get("evo_image_folder") or "",
                         "evo_cell_folder": review.get("evo_cell_folder") or "",
                         "updated_at": review.get("updated_at") or "",
                     }
@@ -629,6 +648,8 @@ class JobStore:
                                 _review_result(review) == "good"
                                 and self.review_mode == "evo"
                             ),
+                            "source_image": review.get("source_image") or "",
+                            "evo_image_folder": review.get("evo_image_folder") or "",
                             "evo_cell_folder": review.get("evo_cell_folder") or "",
                             "updated_at": review.get("updated_at") or "",
                         }
@@ -648,6 +669,8 @@ class JobStore:
                     "postprocessing",
                     "approved_for_training",
                     "approved_for_evo",
+                    "source_image",
+                    "evo_image_folder",
                     "evo_cell_folder",
                     "updated_at",
                 ],
@@ -667,21 +690,41 @@ class JobStore:
                 },
             )
         else:
-            selected_rows = [
-                {
-                    "cell_folder": row["evo_cell_folder"],
-                    "job_id": row["job_id"],
-                    "case": row["case"],
-                    "source_cell": row["cell"],
-                }
-                for row in rows
-                if row.get("approved_for_evo") and row.get("evo_cell_folder")
-            ]
+            selected_rows = []
+            for row in rows:
+                if not row.get("approved_for_evo") or not row.get("evo_cell_folder"):
+                    continue
+                image_folder = str(row.get("evo_image_folder") or "")
+                cell_folder = str(row["evo_cell_folder"])
+                relative_folder = (
+                    relative_evo_cell_folder(image_folder, cell_folder)
+                    if image_folder
+                    else cell_folder
+                )
+                selected_rows.append(
+                    {
+                        "cell_folder": relative_folder,
+                        "image_folder": image_folder,
+                        "cell_name": cell_folder,
+                        "source_image": row.get("source_image") or "",
+                        "job_id": row["job_id"],
+                        "case": row["case"],
+                        "source_cell": row["cell"],
+                    }
+                )
             manifest_path = self.review_root / "selected_cells.csv"
             with manifest_path.open("w", newline="", encoding="utf-8") as stream:
                 writer = csv.DictWriter(
                     stream,
-                    fieldnames=["cell_folder", "job_id", "case", "source_cell"],
+                    fieldnames=[
+                        "cell_folder",
+                        "image_folder",
+                        "cell_name",
+                        "source_image",
+                        "job_id",
+                        "case",
+                        "source_cell",
+                    ],
                 )
                 writer.writeheader()
                 writer.writerows(selected_rows)
@@ -690,6 +733,9 @@ class JobStore:
                 {
                     "mode": "evo",
                     "selected_cells": len(selected_rows),
+                    "source_images": len(
+                        {row["image_folder"] for row in selected_rows if row["image_folder"]}
+                    ),
                     "cells_root": str((self.review_root / "cells").resolve()),
                     "updated_at": _utc_now(),
                 },
@@ -940,6 +986,10 @@ class JobStore:
                 previous = dict(review_cells.get(folder) or {})
                 if self.review_mode == "evo":
                     output_folder = str(previous.get("evo_cell_folder") or "")
+                    image_folder = str(
+                        previous.get("evo_image_folder")
+                        or source_image_folder(str(job.get("filename") or job.get("case") or "image"))
+                    )
                     if (
                         result == "good"
                         and not re.fullmatch(r"cell\d+", output_folder)
@@ -947,6 +997,8 @@ class JobStore:
                         output_folder = self._next_evo_cell_folder()
                     if re.fullmatch(r"cell\d+", output_folder):
                         review["evo_cell_folder"] = output_folder
+                    review["source_image"] = str(job.get("filename") or "")
+                    review["evo_image_folder"] = image_folder
                 self._sync_review_exports(job_id, folder, review)
                 review_cells[folder] = review
                 self._write_review_state(job_id, review_cells)
@@ -993,11 +1045,7 @@ class JobStore:
             cells_root = self.review_root / "approved"
         else:
             approved = len(
-                [
-                    path
-                    for path in (self.review_root / "cells").glob("cell*")
-                    if path.is_dir()
-                ]
+                list(iter_evo_cell_folders(self.review_root / "cells"))
             )
             cells_root = self.review_root / "cells"
         return {

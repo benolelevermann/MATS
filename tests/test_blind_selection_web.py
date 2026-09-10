@@ -198,7 +198,10 @@ class SelectionStoreTests(unittest.TestCase):
 
             result = store.rate_cell(job_id, "cell0001", "good")
             output_folder = str(result["review"]["evo_cell_folder"])
-            output = root / "evo" / "cells" / output_folder
+            image_folder = str(result["review"]["evo_image_folder"])
+            self.assertEqual(image_folder, "overview")
+            self.assertEqual(result["review"]["source_image"], "overview.tif")
+            output = root / "evo" / "cells" / image_folder / output_folder
             self.assertTrue((output / "seg.traces").is_file())
             self.assertTrue((output / "soma.zip").is_file())
             learning_result = json.loads(

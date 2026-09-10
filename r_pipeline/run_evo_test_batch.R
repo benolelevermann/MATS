@@ -10,7 +10,7 @@
   }, logical(1)))
 }
 
-.find_cell_folder <- function(dataset_dir) {
+.cell_folder_candidates <- function(dataset_dir) {
   candidates <- unique(c(
     dataset_dir,
     list.dirs(dataset_dir, recursive = TRUE, full.names = TRUE)
@@ -24,11 +24,19 @@
   counts <- vapply(candidates, .count_direct_cell_folders, integer(1))
   candidates <- candidates[counts > 0L]
   counts <- counts[counts > 0L]
-  if (!length(candidates)) return(NA_character_)
+  if (!length(candidates)) {
+    return(data.frame(path = character(), cells = integer()))
+  }
+  data.frame(path = candidates, cells = unname(counts), stringsAsFactors = FALSE)
+}
+
+.find_cell_folder <- function(dataset_dir) {
+  candidates <- .cell_folder_candidates(dataset_dir)
+  if (!nrow(candidates)) return(NA_character_)
 
   # Prefer the directory containing the most per-cell folders. This selects,
   # for example, div10_CC/tracings_M237_totrace_Encrypted rather than one cell.
-  candidates[[which.max(counts)]]
+  candidates$path[[which.max(candidates$cells)]]
 }
 
 .find_existing_evo <- function(dataset_dir, analysis_dir) {
@@ -57,13 +65,12 @@ discoverEvoTestDatasets <- function(evo_test_root) {
       !startsWith(basename(dataset_dirs), "_")
   ]
 
-  rows <- lapply(dataset_dirs, function(dataset_dir) {
+  make_row <- function(dataset, dataset_dir, cell_folder) {
     analysis_dir <- file.path(dataset_dir, "scEvoView_analysis")
-    cell_folder <- .find_cell_folder(dataset_dir)
     existing_evo <- .find_existing_evo(dataset_dir, analysis_dir)
     if (is.na(cell_folder) && is.na(existing_evo)) return(NULL)
     data.frame(
-      dataset = basename(dataset_dir),
+      dataset = dataset,
       dataset_dir = normalizePath(dataset_dir, winslash = "/", mustWork = TRUE),
       cell_folder = if (is.na(cell_folder)) NA_character_ else
         normalizePath(cell_folder, winslash = "/", mustWork = TRUE),
@@ -72,8 +79,38 @@ discoverEvoTestDatasets <- function(evo_test_root) {
         normalizePath(existing_evo, winslash = "/", mustWork = TRUE),
       stringsAsFactors = FALSE
     )
+  }
+
+  rows <- lapply(dataset_dirs, function(dataset_dir) {
+    analysis_dir <- file.path(dataset_dir, "scEvoView_analysis")
+    existing_evo <- .find_existing_evo(dataset_dir, analysis_dir)
+    candidates <- .cell_folder_candidates(dataset_dir)
+
+    # A grouped Evo export has one child directory per input image. Expose each
+    # of those image folders as a separate PCA dataset. Ordinary experiment
+    # folders (for example div10_CC) have one cell root and remain one dataset.
+    if (is.na(existing_evo) && nrow(candidates) > 1L) {
+      direct_candidates <- candidates[
+        dirname(normalizePath(candidates$path, winslash = "/", mustWork = TRUE)) ==
+          normalizePath(dataset_dir, winslash = "/", mustWork = TRUE),
+        ,
+        drop = FALSE
+      ]
+      if (nrow(direct_candidates) > 1L) {
+        return(lapply(seq_len(nrow(direct_candidates)), function(index) {
+          image_dir <- direct_candidates$path[[index]]
+          make_row(
+            paste(basename(dataset_dir), basename(image_dir), sep = " / "),
+            image_dir,
+            image_dir
+          )
+        }))
+      }
+    }
+
+    list(make_row(basename(dataset_dir), dataset_dir, .find_cell_folder(dataset_dir)))
   })
-  rows <- Filter(Negate(is.null), rows)
+  rows <- Filter(Negate(is.null), unlist(rows, recursive = FALSE))
   if (!length(rows)) {
     stop(sprintf("FEHLER: Keine auswertbaren Datensaetze in %s gefunden.", evo_test_root))
   }

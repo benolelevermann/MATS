@@ -28,10 +28,23 @@ from cell_pipeline_web.server import (
     JobStore,
     settings_for_hysteresis_profile,
 )
+from cell_pipeline_web.evo_export_layout import source_image_folder
 from apply_adaptive_hysteresis import resolve_thresholds
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+class EvoExportLayoutTests(unittest.TestCase):
+    def test_source_image_folder_uses_tiff_stem_and_safe_characters(self) -> None:
+        self.assertEqual(
+            source_image_folder("plate#02_DMSO_0000.tif"),
+            "plate_02_DMSO",
+        )
+        self.assertEqual(
+            source_image_folder("10x_zoom1.6_ERplate_E8_DMSO"),
+            "10x_zoom1.6_ERplate_E8_DMSO",
+        )
 
 
 class HysteresisProfileTests(unittest.TestCase):
@@ -502,7 +515,10 @@ class JobStoreTests(unittest.TestCase):
             self.assertTrue(review["approved_for_evo"])
             self.assertFalse(review["approved_for_training"])
             output_folder = str(review["evo_cell_folder"])
-            target = evo_review / "cells" / output_folder
+            image_folder = str(review["evo_image_folder"])
+            self.assertEqual(image_folder, "overview")
+            self.assertEqual(review["source_image"], "overview.tif")
+            target = evo_review / "cells" / image_folder / output_folder
             for name in (
                 "raw.tif",
                 "seg.tif",
@@ -519,11 +535,15 @@ class JobStoreTests(unittest.TestCase):
                 (evo_review / "selection_summary.json").read_text(encoding="utf-8")
             )
             self.assertEqual(selection["selected_cells"], 1)
+            self.assertEqual(selection["source_images"], 1)
             with self.assertRaisesRegex(ValueError, "disabled in Evo mode"):
                 store.recrop_cell(str(job["id"]), "cell0001", 0, 0, 40, 40)
             archive_path = store.approved_archive()
             with zipfile.ZipFile(archive_path) as archive:
-                self.assertIn(f"cells/{output_folder}/seg-000.swc", archive.namelist())
+                self.assertIn(
+                    f"cells/{image_folder}/{output_folder}/seg-000.swc",
+                    archive.namelist(),
+                )
 
             rejected = store.rate_cell(str(job["id"]), "cell0001", result="bad")
             self.assertFalse(rejected["review"]["approved_for_evo"])

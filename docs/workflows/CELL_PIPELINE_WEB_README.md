@@ -224,13 +224,16 @@ kept separately in:
 
 ```text
 evo_pipeline_input_net141/
-  cells/cell000001/...
+  cells/<source-image-name>/cell000001/...
   selected_cells.csv
   selection_summary.json
   evo_selected_cells.zip
 ```
 
-The `cells` directory can be used directly as the cell-folder input of the Evo/R pipeline.
+Each input TIFF receives its own directory below `cells`. Use one such image
+directory directly as the cell-folder input of the Evo/R pipeline. This keeps
+cells from different overview images separate during feature extraction and
+comparison.
 
 ## Manuell getracte ROCKi-Zellen prüfen
 

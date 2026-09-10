@@ -25,6 +25,11 @@ import tifffile
 from PIL import Image
 
 from cell_pipeline_web.pipeline import _normalize_u8, default_settings
+from cell_pipeline_web.evo_export_layout import (
+    iter_evo_cell_folders,
+    relative_evo_cell_folder,
+    source_image_folder,
+)
 from .pipeline import (
     BlindSelectionSettings,
     PIPELINE_VERSION,
@@ -454,7 +459,7 @@ class SelectionJobStore:
 
     def _next_output_folder(self) -> str:
         identifiers: set[int] = set()
-        for path in (self.output_root / "cells").glob("cell*"):
+        for path in iter_evo_cell_folders(self.output_root / "cells"):
             match = re.fullmatch(r"cell(\d+)", path.name)
             if path.is_dir() and match:
                 identifiers.add(int(match.group(1)))
@@ -490,16 +495,25 @@ class SelectionJobStore:
             output_folder = str(previous.get("evo_cell_folder") or "")
             if result == "good" and not re.fullmatch(r"cell\d+", output_folder):
                 output_folder = self._next_output_folder()
+            image_folder = str(
+                previous.get("evo_image_folder")
+                or source_image_folder(str(job.get("filename") or job.get("case") or "image"))
+            )
             review = {
                 "job_id": job_id, "case": job["case"], "cell": folder,
                 "selection_id": crop.get("selection_id"), "result": result,
                 "approved_for_evo": result == "good", "updated_at": _utc_now(),
+                "source_image": str(job.get("filename") or ""),
+                "evo_image_folder": image_folder,
                 "evo_cell_folder": output_folder or None,
             }
             if output_folder:
-                target = self.output_root / "cells" / output_folder
+                target = self.output_root / "cells" / image_folder / output_folder
                 if target.is_dir():
                     shutil.rmtree(target)
+                legacy_target = self.output_root / "cells" / output_folder
+                if legacy_target.is_dir():
+                    shutil.rmtree(legacy_target)
                 if result == "good":
                     source = self.runs_root / job_id / "04_evo_single_cells" / folder
                     required = ("raw.tif", "seg.tif", "seg-000.swc", "seg.traces", "soma.zip", "bounds.zip")
@@ -526,22 +540,43 @@ class SelectionJobStore:
 
     def _rebuild_output_index(self) -> None:
         rows: list[dict[str, object]] = []
-        for path in sorted((self.output_root / "cells").glob("cell*/review.json")):
+        for path in sorted((self.output_root / "cells").rglob("cell*/review.json")):
             try:
                 review = json.loads(path.read_text(encoding="utf-8"))
-                rows.append(
-                    {"cell_folder": path.parent.name, "job_id": review["job_id"],
-                     "case": review["case"], "source_cell": review["cell"],
-                     "selection_id": review.get("selection_id")}
-                )
+                image_folder = str(review.get("evo_image_folder") or "")
+                cell_name = path.parent.name
+                rows.append({
+                    "cell_folder": (
+                        relative_evo_cell_folder(image_folder, cell_name)
+                        if image_folder else cell_name
+                    ),
+                    "image_folder": image_folder,
+                    "cell_name": cell_name,
+                    "source_image": review.get("source_image") or "",
+                    "job_id": review["job_id"],
+                    "case": review["case"],
+                    "source_cell": review["cell"],
+                    "selection_id": review.get("selection_id"),
+                })
             except Exception:
                 continue
         self._write_json_atomic(
             self.output_root / "selection_summary.json",
-            {"selected_cells": len(rows), "cells_root": str((self.output_root / 'cells').resolve()), "updated_at": _utc_now()},
+            {
+                "selected_cells": len(rows),
+                "source_images": len({row["image_folder"] for row in rows if row["image_folder"]}),
+                "cells_root": str((self.output_root / 'cells').resolve()),
+                "updated_at": _utc_now(),
+            },
         )
         with (self.output_root / "selected_cells.csv").open("w", newline="", encoding="utf-8") as stream:
-            writer = csv.DictWriter(stream, fieldnames=["cell_folder", "job_id", "case", "source_cell", "selection_id"])
+            writer = csv.DictWriter(
+                stream,
+                fieldnames=[
+                    "cell_folder", "image_folder", "cell_name", "source_image",
+                    "job_id", "case", "source_cell", "selection_id",
+                ],
+            )
             writer.writeheader()
             writer.writerows(rows)
 
