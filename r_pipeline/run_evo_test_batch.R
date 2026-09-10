@@ -58,6 +58,24 @@
   found[[which.max(file.info(found)$mtime)]]
 }
 
+.short_analysis_id <- function(dataset, max_length = 32L) {
+  clean <- gsub("[^A-Za-z0-9_-]+", "_", dataset)
+  clean <- gsub("_+", "_", clean)
+  clean <- gsub("^_+|_+$", "", clean)
+  if (!nzchar(clean)) clean <- "dataset"
+  if (nchar(clean, type = "chars") <= max_length) return(clean)
+
+  # Keep feature-extraction filenames below the legacy Windows MAX_PATH
+  # boundary used by LMeasure. The weighted checksum keeps truncated names
+  # deterministic and distinct without adding another R dependency.
+  codes <- utf8ToInt(enc2utf8(dataset))
+  checksum <- sum((as.double(codes) * seq_along(codes)) %% 1000000007) %%
+    1000000007
+  suffix <- sprintf("%08x", as.integer(checksum))
+  prefix_length <- max(1L, max_length - nchar(suffix) - 1L)
+  paste0(substr(clean, 1L, prefix_length), "_", suffix)
+}
+
 discoverEvoTestDatasets <- function(evo_test_root) {
   dataset_dirs <- list.dirs(evo_test_root, recursive = FALSE, full.names = TRUE)
   dataset_dirs <- dataset_dirs[
@@ -71,6 +89,7 @@ discoverEvoTestDatasets <- function(evo_test_root) {
     if (is.na(cell_folder) && is.na(existing_evo)) return(NULL)
     data.frame(
       dataset = dataset,
+      analysis_id = .short_analysis_id(dataset),
       dataset_dir = normalizePath(dataset_dir, winslash = "/", mustWork = TRUE),
       cell_folder = if (is.na(cell_folder)) NA_character_ else
         normalizePath(cell_folder, winslash = "/", mustWork = TRUE),
@@ -256,11 +275,12 @@ analyzeOneEvoTestDataset <- function(
   output_dir <- dataset_row$analysis_dir
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
   message(sprintf("\n===== %s =====", dataset_row$dataset))
+  message(sprintf("Interne Analyse-ID: %s", dataset_row$analysis_id))
   message(sprintf("Zellordner: %s", dataset_row$cell_folder))
   message(sprintf("Ausgabe:     %s", output_dir))
 
   meta_data <- .prepare_evo_metadata(
-    dataset_row$cell_folder, output_dir, dataset_row$dataset, cellline,
+    dataset_row$cell_folder, output_dir, dataset_row$analysis_id, cellline,
     acquisition_mode, pixel_width, pixel_height, pixel_depth, pixel_unit,
     is_swc_scaled, use_speedfiles, labels
   )
