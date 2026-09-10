@@ -76,7 +76,22 @@
   paste0(substr(clean, 1L, prefix_length), "_", suffix)
 }
 
-discoverEvoTestDatasets <- function(evo_test_root) {
+.replace_percell_dataset_id <- function(meta_data, analysis_id) {
+  required <- c("cellnr", "cellframe")
+  missing <- setdiff(required, names(meta_data))
+  if (length(missing)) {
+    stop(sprintf(
+      "FEHLER: Per-cell-Metadaten enthalten nicht: %s",
+      paste(missing, collapse = ", ")
+    ))
+  }
+  meta_data$mousename <- analysis_id
+  meta_data$cellid <- paste0(analysis_id, "_", meta_data$cellnr)
+  meta_data$id <- paste0(meta_data$cellid, "_", meta_data$cellframe)
+  meta_data
+}
+
+discoverEvoTestDatasets <- function(evo_test_root, analysis_id_max_length = 32L) {
   dataset_dirs <- list.dirs(evo_test_root, recursive = FALSE, full.names = TRUE)
   dataset_dirs <- dataset_dirs[
     !startsWith(basename(dataset_dirs), ".") &
@@ -89,7 +104,7 @@ discoverEvoTestDatasets <- function(evo_test_root) {
     if (is.na(cell_folder) && is.na(existing_evo)) return(NULL)
     data.frame(
       dataset = dataset,
-      analysis_id = .short_analysis_id(dataset),
+      analysis_id = .short_analysis_id(dataset, analysis_id_max_length),
       dataset_dir = normalizePath(dataset_dir, winslash = "/", mustWork = TRUE),
       cell_folder = if (is.na(cell_folder)) NA_character_ else
         normalizePath(cell_folder, winslash = "/", mustWork = TRUE),
@@ -183,6 +198,10 @@ discoverEvoTestDatasets <- function(evo_test_root) {
     meta_data <- getMetaData_singlecellBATCH_percell_v2(
       cell_folder, pixel_unit, is_swc_scaled
     )
+    # This metadata reader derives IDs from the (possibly very long) parent
+    # folder name and has no dataset-name argument. Replace only its IDs before
+    # parseSWCFilesStepOne writes LMeasure input/output filenames.
+    meta_data <- .replace_percell_dataset_id(meta_data, dataset_name)
   } else {
     stop(sprintf("FEHLER: Unbekannter acquisition_mode '%s'.", acquisition_mode))
   }
@@ -323,9 +342,10 @@ runEvoTestBatch <- function(
   pixel_unit,
   is_swc_scaled,
   use_speedfiles,
-  labels
+  labels,
+  analysis_id_max_length = 32L
 ) {
-  datasets <- discoverEvoTestDatasets(evo_test_root)
+  datasets <- discoverEvoTestDatasets(evo_test_root, analysis_id_max_length)
   dir.create(comparison_dir, recursive = TRUE, showWarnings = FALSE)
   utils::write.csv(datasets, file.path(comparison_dir, "detected_datasets.csv"), row.names = FALSE)
   print(datasets[, c("dataset", "cell_folder", "existing_evo"), drop = FALSE])
