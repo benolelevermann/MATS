@@ -94,36 +94,107 @@ class CanonicalSkeletonTests(unittest.TestCase):
                     int(fields[6]),
                 )
 
-        edge_lengths = []
-        soma_child_count = 0
+        root_x = nodes[1][1]
+        root_y = nodes[1][2]
+        path_start_ids = []
         for node_id, (node_type, x, y, parent_id) in nodes.items():
-            if parent_id < 0:
+            if parent_id == 1:
+                path_start_ids.append(node_id)
+                self.assertEqual(node_type, 3)
+                self.assertAlmostEqual(x, root_x)
+                self.assertAlmostEqual(y, root_y)
+        self.assertEqual(nodes[1][0], 1)
+        self.assertEqual(len(path_start_ids), 2)
+
+        attachment_ids = []
+        connector_edges = set()
+        for path_start_id in path_start_ids:
+            children = [
+                node_id
+                for node_id, (_node_type, _x, _y, parent_id) in nodes.items()
+                if parent_id == path_start_id
+            ]
+            self.assertEqual(len(children), 1)
+            attachment_ids.append(children[0])
+            connector_edges.add((children[0], path_start_id))
+        attachments = [(nodes[node_id][1], nodes[node_id][2]) for node_id in attachment_ids]
+        self.assertAlmostEqual(
+            root_x,
+            sum(point[0] for point in attachments) / len(attachments),
+        )
+        self.assertAlmostEqual(
+            root_y,
+            sum(point[1] for point in attachments) / len(attachments),
+        )
+        self.assertNotAlmostEqual(root_y, 23.5)
+
+        edge_lengths = []
+        for node_id, (_node_type, x, y, parent_id) in nodes.items():
+            if parent_id < 0 or parent_id == 1:
+                continue
+            if (node_id, parent_id) in connector_edges:
                 continue
             _, parent_x, parent_y, _ = nodes[parent_id]
-            if parent_id == 1:
-                soma_child_count += 1
-                self.assertEqual(node_type, 3)
-            else:
-                edge_lengths.append(np.hypot(x - parent_x, y - parent_y))
-        self.assertEqual(nodes[1][0], 1)
-        self.assertEqual(soma_child_count, 2)
-        soma_children = [
-            (x, y)
-            for _node_id, (_node_type, x, y, parent_id) in nodes.items()
-            if parent_id == 1
-        ]
-        self.assertAlmostEqual(
-            nodes[1][1],
-            sum(point[0] for point in soma_children) / len(soma_children),
-        )
-        self.assertAlmostEqual(
-            nodes[1][2],
-            sum(point[1] for point in soma_children) / len(soma_children),
-        )
-        self.assertNotAlmostEqual(nodes[1][2], 23.5)
+            edge_lengths.append(np.hypot(x - parent_x, y - parent_y))
         self.assertLessEqual(max(edge_lengths), np.sqrt(2) + 1e-6)
         self.assertEqual(report["skeleton_nodes"], int(skeleton.sum()))
-        self.assertEqual(report["soma_connector_nodes"], 1)
+        self.assertEqual(report["soma_connector_nodes"], 3)
+        self.assertEqual(report["shared_path_start_nodes"], 2)
+        self.assertEqual(report["soma_center_connector_nodes"], 0)
+
+    def test_single_primary_path_adds_manual_style_soma_center_path(self) -> None:
+        soma = np.zeros((48, 48), dtype=bool)
+        soma[18:30, 18:30] = True
+        skeleton = np.zeros_like(soma)
+        skeleton[23, 30:43] = True
+
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "cell.swc"
+            report = write_swc(path, skeleton, soma)
+            nodes = {}
+            for line_text in path.read_text(encoding="utf-8").splitlines():
+                if not line_text or line_text.startswith("#"):
+                    continue
+                fields = line_text.split()
+                nodes[int(fields[0])] = (
+                    int(fields[1]),
+                    float(fields[2]),
+                    float(fields[3]),
+                    int(fields[6]),
+                )
+
+        # The root is the soma-adjacent skeleton attachment, not the soma center.
+        self.assertEqual(nodes[1][0], 1)
+        self.assertAlmostEqual(nodes[1][1], 30.0)
+        self.assertAlmostEqual(nodes[1][2], 23.0)
+
+        root_children = [
+            node_id
+            for node_id, (_node_type, _x, _y, parent_id) in nodes.items()
+            if parent_id == 1
+        ]
+        self.assertEqual(len(root_children), 2)
+        process_children = [node_id for node_id in root_children if nodes[node_id][1] > 30.0]
+        connector_starts = [
+            node_id
+            for node_id in root_children
+            if nodes[node_id][1] == 30.0 and nodes[node_id][2] == 23.0
+        ]
+        self.assertEqual(len(process_children), 1)
+        self.assertEqual(len(connector_starts), 1)
+
+        connector_end = [
+            node_id
+            for node_id, (_node_type, _x, _y, parent_id) in nodes.items()
+            if parent_id == connector_starts[0]
+        ]
+        self.assertEqual(len(connector_end), 1)
+        self.assertAlmostEqual(nodes[connector_end[0]][1], 23.5)
+        self.assertAlmostEqual(nodes[connector_end[0]][2], 23.5)
+        self.assertEqual(report["skeleton_nodes"], int(skeleton.sum()))
+        self.assertEqual(report["soma_connector_nodes"], 3)
+        self.assertEqual(report["shared_path_start_nodes"], 0)
+        self.assertEqual(report["soma_center_connector_nodes"], 2)
 
     def test_swc_rejects_a_hidden_long_background_connection(self) -> None:
         soma = np.zeros((48, 48), dtype=bool)

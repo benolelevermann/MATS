@@ -1,9 +1,10 @@
 [CmdletBinding()]
 param(
     [string[]]$AutomaticRoot = @(
-        "20260910_evo_DMSO_canonical1px_snt_shared_root"
+        "20260910_evo_DMSO_canonical1px_snt_exact_roots"
     ),
     [double]$MaximumDistancePx = 20.0,
+    [double]$ManualPixelSizeUm = 0.406249892061169,
     [int]$Port = 8789
 )
 
@@ -26,6 +27,7 @@ $arguments = @(
     "--test-root", $testRoot,
     "--output-dir", $output,
     "--maximum-distance-px", $MaximumDistancePx,
+    "--manual-pixel-size-um", $ManualPixelSizeUm,
     "--replace"
 )
 foreach ($root in $AutomaticRoot) {

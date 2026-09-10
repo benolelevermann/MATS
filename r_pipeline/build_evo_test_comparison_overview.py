@@ -27,7 +27,7 @@ from PIL import Image, ImageDraw
 from roifile import ImagejRoi
 
 
-SCRIPT_VERSION = "evo-test-comparison-v1-2026-09-10"
+SCRIPT_VERSION = "evo-test-comparison-v2-manual-swc-scale-2026-09-10"
 
 
 @dataclass(frozen=True)
@@ -77,6 +77,12 @@ def parse_args() -> argparse.Namespace:
         default=test_root / "comparison_overview",
     )
     parser.add_argument("--maximum-distance-px", type=float, default=20.0)
+    parser.add_argument(
+        "--manual-pixel-size-um",
+        type=float,
+        default=0.406249892061169,
+        help="Pixel calibration used by the manual SNT SWCs.",
+    )
     parser.add_argument(
         "--replace",
         action="store_true",
@@ -258,7 +264,7 @@ def save_webp(image: Image.Image, path: Path) -> None:
     fit_for_web(image).save(path, "WEBP", quality=86, method=4)
 
 
-def manual_annotation(cell: ManualCell) -> Image.Image:
+def manual_annotation(cell: ManualCell, coordinate_scale: float) -> Image.Image:
     image = normalized_rgb(cell.cell_dir / "raw.tif")
     overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
@@ -268,7 +274,18 @@ def manual_annotation(cell: ManualCell) -> Image.Image:
             draw.polygon(points, fill=(255, 54, 164, 180))
     nodes, edges = read_swc(cell.cell_dir / "seg.swc")
     for node_id, parent_id in edges:
-        draw.line((nodes[parent_id], nodes[node_id]), fill=(0, 238, 255, 255), width=1)
+        parent_x, parent_y = nodes[parent_id]
+        node_x, node_y = nodes[node_id]
+        draw.line(
+            (
+                parent_x * coordinate_scale,
+                parent_y * coordinate_scale,
+                node_x * coordinate_scale,
+                node_y * coordinate_scale,
+            ),
+            fill=(0, 238, 255, 255),
+            width=1,
+        )
     return Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
 
 
@@ -338,7 +355,10 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         manual_annotation_name = f"{prefix}_manual_annotation.webp"
         manual_trace = f"{prefix}_manual_evo_input.svg"
         save_webp(normalized_rgb(manual.cell_dir / "raw.tif"), assets / manual_raw)
-        save_webp(manual_annotation(manual), assets / manual_annotation_name)
+        save_webp(
+            manual_annotation(manual, 1.0 / args.manual_pixel_size_um),
+            assets / manual_annotation_name,
+        )
         manual_nodes, manual_edges = read_swc(manual.cell_dir / "seg.swc")
         write_trace_svg(assets / manual_trace, manual_nodes, manual_edges)
 
@@ -420,6 +440,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         "manual_without_automatic": len(manual_cells) - len(matches),
         "automatic_without_manual": len(unmatched_automatic),
         "maximum_distance_px": args.maximum_distance_px,
+        "manual_pixel_size_um": args.manual_pixel_size_um,
         "automatic_roots": [str(path.resolve()) for path in args.automatic_root],
     }
     (args.output_dir / "summary.json").write_text(
@@ -452,6 +473,8 @@ def main() -> int:
     args = parse_args()
     if args.maximum_distance_px <= 0:
         raise ValueError("--maximum-distance-px must be positive")
+    if args.manual_pixel_size_um <= 0:
+        raise ValueError("--manual-pixel-size-um must be positive")
     if args.output_dir.exists() and any(args.output_dir.iterdir()) and not args.replace:
         raise FileExistsError(
             f"Output is not empty: {args.output_dir}. Add --replace to update it."

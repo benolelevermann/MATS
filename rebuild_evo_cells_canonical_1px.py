@@ -18,7 +18,7 @@ from canonical_skeleton import canonicalize_semantic, canonicalize_skeleton
 from r_pipeline.export_cells_for_r_pipeline import save_tiff, write_pixel_csv, write_swc
 
 
-SCRIPT_VERSION = "canonical-evo-rebuild-v3-snt-shared-root-2026-09-10"
+SCRIPT_VERSION = "canonical-evo-rebuild-v4-snt-path-roots-2026-09-10"
 UNCHANGED_FILES = (
     "raw.tif",
     "prediction.tif",
