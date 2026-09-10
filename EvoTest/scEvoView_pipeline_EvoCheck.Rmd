@@ -38,9 +38,6 @@ evo_test_root <- "C:/Ole/20260721_CellClassification_v2/EvoTest"
 batch_output_dir <- file.path(evo_test_root, "_batch_comparison")
 # Hier kann auch "PC2", "diffscore" oder jede andere numerische Spalte stehen.
 comparison_metric <- "PC1"
-# Kurze interne Zell-IDs verhindern, dass das alte Windows-LMeasure an der
-# 260-Zeichen-Pfadgrenze scheitert. Der sichtbare Datasetname bleibt erhalten.
-analysis_id_max_length <- 32L
 # TRUE spart Zeit: vorhandene evoObject.rds werden geladen. Neue Ordner werden
 # automatisch vollstaendig analysiert.
 reuse_existing_evo <- TRUE
@@ -238,7 +235,9 @@ batch_results <- runEvoTestBatch(
   pixel_unit = pixel_unit,
   is_swc_scaled = is_swc_scaled,
   use_speedfiles = use_speedfiles,
-  analysis_id_max_length = analysis_id_max_length,
+  # Direkt gesetzt, damit dieser Chunk auch einzeln ausgefuehrt werden kann.
+  # Der sichtbare Datasetname bleibt vollstaendig erhalten.
+  analysis_id_max_length = 32L,
   labels = list(
     human = label_human,
     em = label_em,
