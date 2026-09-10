@@ -122,6 +122,14 @@ plotAnalyzedSwc <- function(trace, pixel_unit) {
 
   ggplot2::ggplot() +
     ggplot2::geom_segment(
+      data = trace$edges[trace$edges$type == 1, , drop = FALSE],
+      ggplot2::aes(x = x, y = y, xend = xend, yend = yend),
+      color = "#ed5c9e",
+      linewidth = 0.58,
+      alpha = 0.90,
+      lineend = "round"
+    ) +
+    ggplot2::geom_segment(
       data = trace$edges[trace$edges$type != 1, , drop = FALSE],
       ggplot2::aes(x = x, y = y, xend = xend, yend = yend),
       color = "#00c6d8",
@@ -258,7 +266,7 @@ renderAnalyzedSkeletons <- function(
         ),
         subtitle = paste(
           sprintf("Quelle: %s;", source_description),
-          "Cyan = Baum, Magenta = Soma/Wurzel, Gelb = Verzweigung"
+          "Cyan = Neurit, Magenta = Soma/Wurzel und Soma-Verbindung, Gelb = Verzweigung"
         )
       )
     page_paths[[page_index]] <- file.path(

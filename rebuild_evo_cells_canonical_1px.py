@@ -107,7 +107,7 @@ def overlay_swc(
     raw: np.ndarray,
     swc_path: Path,
     soma: np.ndarray,
-    hide_soma_connectors: bool,
+    highlight_soma_connectors: bool,
 ) -> Image.Image:
     image = Image.fromarray(normalized_rgb(raw))
     draw = ImageDraw.Draw(image)
@@ -115,10 +115,13 @@ def overlay_swc(
     for node_id, (node_type, x, y, parent_id) in nodes.items():
         if parent_id not in nodes:
             continue
-        if hide_soma_connectors and node_type == 1:
-            continue
         _, parent_x, parent_y, _ = nodes[parent_id]
-        draw.line((parent_x, parent_y, x, y), fill=(0, 238, 255), width=1)
+        color = (
+            (255, 54, 164)
+            if highlight_soma_connectors and node_type == 1
+            else (0, 238, 255)
+        )
+        draw.line((parent_x, parent_y, x, y), fill=color, width=1)
     soma_rows, soma_columns = np.nonzero(soma)
     if soma_rows.size:
         draw.ellipse(
@@ -251,7 +254,12 @@ def build_report(
         save_preview(Image.fromarray(normalized_rgb(raw)), paths["raw"])
         save_preview(overlay_mask(raw, old_skeleton, soma), paths["old_mask"])
         save_preview(
-            overlay_swc(raw, source / "seg-000.swc", soma, hide_soma_connectors=False),
+            overlay_swc(
+                raw,
+                source / "seg-000.swc",
+                soma,
+                highlight_soma_connectors=False,
+            ),
             paths["old_swc"],
         )
         save_preview(overlay_mask(raw, new_skeleton, soma), paths["new_mask"])
@@ -260,7 +268,7 @@ def build_report(
                 raw,
                 destination / "seg-000.swc",
                 soma,
-                hide_soma_connectors=True,
+                highlight_soma_connectors=True,
             )
         else:
             new_swc = overlay_mask(raw, new_skeleton, soma)
@@ -276,7 +284,7 @@ def build_report(
                 <figure><img loading="lazy" src="{relative['old_mask']}"><figcaption>Bisherige Maske</figcaption></figure>
                 <figure><img loading="lazy" src="{relative['old_swc']}"><figcaption>Bisheriges SWC</figcaption></figure>
                 <figure><img loading="lazy" src="{relative['new_mask']}"><figcaption>Kanonisch 1 px</figcaption></figure>
-                <figure><img loading="lazy" src="{relative['new_swc']}"><figcaption>Neues SWC</figcaption></figure>
+                <figure><img loading="lazy" src="{relative['new_swc']}"><figcaption>Neues SWC · Soma-Verbindung magenta</figcaption></figure>
               </div>
               <p>{row['input_pixels']} → {row['output_pixels']} Skeletonpixel · {row['pixels_removed_by_thinning']} entfernt · {row['soma_gap_pixels_added']} Soma-Gap-Pixel ergänzt · {row['detached_components_after']} abgetrennte Komponenten</p>
             </article>"""
@@ -284,12 +292,25 @@ def build_report(
 
     safe_count = sum(row["status"] == "safe" for row in rows)
     review_count = len(rows) - safe_count
+    analyzed_index = (
+        output_root
+        / "scevoview_normalized_v2"
+        / "analyzed_skeletons"
+        / "index.html"
+    )
+    analyzed_link = (
+        '<p><a class="analysis-link" href="scevoview_normalized_v2/'
+        'analyzed_skeletons/index.html">Tatsächlich von scEvoView analysierte '
+        "SNT-Traces öffnen</a></p>"
+        if analyzed_index.is_file()
+        else ""
+    )
     index_path = output_root / "index.html"
     index_path.write_text(
         f"""<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MATS · 1-px-Skeleton A/B</title><style>
-body{{margin:0;background:#111820;color:#edf5f2;font:14px system-ui,sans-serif}}main{{width:min(1900px,calc(100% - 28px));margin:auto}}h1{{font:42px Georgia,serif;margin:28px 0 6px}}.lead{{color:#aab8b5;max-width:1000px}}nav{{position:sticky;top:0;background:#111820ee;padding:12px 0;z-index:3}}button{{border:1px solid #4b5b61;background:#1b2730;color:white;padding:8px 13px;margin-right:7px;border-radius:7px}}.card{{background:#19232c;margin:15px 0;padding:12px;border-left:4px solid #36d5ad}}.card header{{display:flex;justify-content:space-between;font-size:16px}}.images{{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:10px}}figure{{margin:0}}img{{width:100%;height:auto;background:#05080a}}figcaption{{color:#aab8b5;margin-top:4px}}.safe{{color:#4ee1a8}}.review{{color:#ffc857}}p{{color:#aab8b5}}@media(max-width:1000px){{.images{{grid-template-columns:1fr 1fr}}}}
-</style></head><body><main><h1>Kanonisches 1-px-Skeleton</h1><p class="lead">Dieselben {len(rows)} freigegebenen Zellen. Alt bleibt unverändert; neu verwendet eine einzige 1-px-Maske für TIFF, CSV und SWC. Lange, unsichtbare SWC-Verbindungen über Hintergrund werden nicht zugelassen.</p><nav><button onclick="filterCards('all')">Alle {len(rows)}</button><button onclick="filterCards('safe')">Sicher {safe_count}</button><button onclick="filterCards('review')">Review {review_count}</button></nav>{''.join(cards)}</main>
+body{{margin:0;background:#111820;color:#edf5f2;font:14px system-ui,sans-serif}}main{{width:min(1900px,calc(100% - 28px));margin:auto}}h1{{font:42px Georgia,serif;margin:28px 0 6px}}.lead{{color:#aab8b5;max-width:1000px}}.analysis-link{{display:inline-block;color:#07120f;background:#58e0b7;padding:9px 13px;border-radius:6px;text-decoration:none;font-weight:700}}nav{{position:sticky;top:0;background:#111820ee;padding:12px 0;z-index:3}}button{{border:1px solid #4b5b61;background:#1b2730;color:white;padding:8px 13px;margin-right:7px;border-radius:7px}}.card{{background:#19232c;margin:15px 0;padding:12px;border-left:4px solid #36d5ad}}.card header{{display:flex;justify-content:space-between;font-size:16px}}.images{{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:10px}}figure{{margin:0}}img{{width:100%;height:auto;background:#05080a}}figcaption{{color:#aab8b5;margin-top:4px}}.safe{{color:#4ee1a8}}.review{{color:#ffc857}}p{{color:#aab8b5}}@media(max-width:1000px){{.images{{grid-template-columns:1fr 1fr}}}}
+</style></head><body><main><h1>Kanonisches 1-px-Skeleton</h1><p class="lead">Dieselben {len(rows)} freigegebenen Zellen. Alt bleibt unverändert; neu verwendet eine einzige 1-px-Maske für TIFF, CSV und SWC. Lange, unsichtbare SWC-Verbindungen über Hintergrund werden nicht zugelassen. Im neuen SWC zeigt Magenta den pixelweisen Weg vom Soma-Mittelpunkt bis zum Neuritenansatz; Cyan zeigt den eigentlichen Neuriten.</p>{analyzed_link}<nav><button onclick="filterCards('all')">Alle {len(rows)}</button><button onclick="filterCards('safe')">Sicher {safe_count}</button><button onclick="filterCards('review')">Review {review_count}</button></nav>{''.join(cards)}</main>
 <script>function filterCards(s){{document.querySelectorAll('.card').forEach(c=>c.style.display=(s==='all'||c.dataset.status===s)?'block':'none')}}</script></body></html>""",
         encoding="utf-8",
     )
